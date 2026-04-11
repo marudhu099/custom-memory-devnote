@@ -24,6 +24,18 @@
       {
         "command": "devnote.create",
         "title": "DevNote: Create Dev Note"
+      },
+      {
+        "command": "devnote.sync",
+        "title": "DevNote: Sync to Notion"
+      },
+      {
+        "command": "devnote.setGeminiKey",
+        "title": "DevNote: Set Gemini API Key"
+      },
+      {
+        "command": "devnote.setNotionToken",
+        "title": "DevNote: Set Notion Token"
       }
     ],
     "keybindings": [
@@ -31,13 +43,30 @@
         "command": "devnote.create",
         "key": "ctrl+alt+d",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "devnote.sync",
+        "key": "ctrl+alt+m",
+        "when": "editorTextFocus"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "DevNote",
+      "properties": {
+        "devnote.notionDatabaseId": {
+          "type": "string",
+          "default": "",
+          "description": "Notion database ID to sync dev notes to"
+        }
+      }
+    }
   },
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "test": "npm run compile && node test/run-tests.cjs",
+    "test:unit": "node test/run-tests.cjs"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
