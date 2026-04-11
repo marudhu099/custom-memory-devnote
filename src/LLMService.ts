@@ -32,7 +32,7 @@ export class GeminiLLMService implements LLMService {
 
   async generateNote(payload: NotePayload): Promise<StructuredNote> {
     const genAI = new GoogleGenerativeAI(this.apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `You are a developer documentation assistant. Analyze the following git diff and generate a structured developer note.
 
@@ -68,7 +68,7 @@ Respond in this exact JSON format (no markdown fences, just raw JSON):
 
   async structureForNotion(noteContent: string): Promise<string> {
     const genAI = new GoogleGenerativeAI(this.apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `Convert the following developer note into a clean, readable format suitable for a Notion page. Return plain text with markdown headings and bullet points. Keep it concise and well-structured.
 
