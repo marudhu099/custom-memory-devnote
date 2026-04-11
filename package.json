@@ -1,0 +1,51 @@
+{
+  "name": "devnote",
+  "displayName": "DevNote",
+  "description": "Generate structured developer notes from git changes, attached to commits",
+  "version": "0.1.0",
+  "publisher": "codevantage",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "documentation",
+    "ai",
+    "developer notes",
+    "commit"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "devnote.create",
+        "title": "DevNote: Create Dev Note"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "devnote.create",
+        "key": "ctrl+alt+d",
+        "when": "editorTextFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "simple-git": "^3.22.0"
+  }
+}
