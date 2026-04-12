@@ -1,0 +1,28 @@
+# Source files (we ship compiled .js, not .ts)
+src/**
+tsconfig.json
+
+# Dev files
+.vscode/**
+.vscode-test/**
+.gitignore
+
+# Docs and planning (not needed in runtime)
+docs/**
+devnote-extension-master.md
+*.md
+!README.md
+!CHANGELOG.md
+
+# Tests
+test/**
+**/*.test.ts
+**/*.test.js
+**/*.test.cjs
+
+# Build artifacts
+*.vsix
+out/**/*.map
+
+# Other
+.github/**

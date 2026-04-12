@@ -1,13 +1,26 @@
 {
   "name": "devnote",
   "displayName": "DevNote",
-  "description": "Generate structured developer notes from git changes, attached to commits",
+  "description": "AI-generated dev notes from git diffs. Save locally, sync to Notion, never lose context again.",
   "version": "0.1.0",
-  "publisher": "codevantage",
+  "publisher": "marudhu099",
+  "author": "Marudhupandiyan",
+  "license": "MIT",
+  "icon": "asset/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/marudhu099/custom-memory-devnote.git"
+  },
+  "bugs": {
+    "url": "https://github.com/marudhu099/custom-memory-devnote/issues"
+  },
+  "homepage": "https://github.com/marudhu099/custom-memory-devnote#readme",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "AI",
+    "SCM Providers",
     "Other"
   ],
   "keywords": [
@@ -15,7 +28,9 @@
     "documentation",
     "ai",
     "developer notes",
-    "commit"
+    "commit",
+    "notion",
+    "gemini"
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
