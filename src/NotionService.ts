@@ -95,6 +95,55 @@ export class NotionService {
     }
   }
 
+  async replacePageBlocks(pageId: string, content: string): Promise<void> {
+    // Step 1: List existing block IDs
+    const listResponse = await fetch(
+      `https://api.notion.com/v1/blocks/${pageId}/children`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          'Notion-Version': '2022-06-28',
+        },
+      }
+    );
+
+    if (!listResponse.ok) {
+      const error = await listResponse.text();
+      throw new Error(
+        `Notion API error listing blocks (${listResponse.status}): ${error}`
+      );
+    }
+
+    const listData = (await listResponse.json()) as {
+      results: Array<{ id: string }>;
+    };
+
+    // Step 2: Delete each existing block
+    for (const block of listData.results) {
+      const deleteResponse = await fetch(
+        `https://api.notion.com/v1/blocks/${block.id}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+            'Notion-Version': '2022-06-28',
+          },
+        }
+      );
+
+      if (!deleteResponse.ok) {
+        const error = await deleteResponse.text();
+        throw new Error(
+          `Notion API error deleting block (${deleteResponse.status}): ${error}`
+        );
+      }
+    }
+
+    // Step 3: Append new blocks (reuses existing method)
+    await this.appendBlocksToPage(pageId, content);
+  }
+
   private markdownToBlocks(content: string): object[] {
     const lines = content.split('\n');
     const blocks: object[] = [];
