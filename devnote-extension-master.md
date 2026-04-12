@@ -37,10 +37,6 @@ Notes are saved locally as `custom_memory_note.md` (gitignored — never committ
 
 All uncommitted changes — both staged and unstaged. This captures the full picture of what the developer worked on, not just what they chose to stage.
 
-### The bigger picture
-
-This extension is the capture layer for **CodeVantage** (your self-healing documentation platform). Dev notes generated from git diffs are pre-documentation — structured, timestamped, file-linked developer context. The extension feeds CodeVantage's pipeline, making it smarter over time.
-
 ---
 
 ## 2. Execution Flow
@@ -303,21 +299,6 @@ Once you have the index, you can surface insights:
 
 ---
 
-### Phase 4 — CodeVantage Pipeline
-
-**Goal:** Extension becomes the capture layer for CodeVantage. Python core is reused directly.
-
-**Build:**
-- `sync_service.py` — pushes notes to CodeVantage API after each save
-- Proxy API backend — CodeVantage hosts LLM calls, no user API key needed
-- Team dashboard — notes across the whole org
-- Multi-LLM support via existing `LLMService` interface (OpenAI, Ollama)
-- Open VSX publish (Cursor, VSCodium, Windsurf users)
-
-**The big payoff:** The same `git_service.py`, `llm_service.py`, `memory_service.py` you built in Phase 3 plug directly into CodeVantage's backend. Zero rewrite. You built the library once and used it in two products.
-
----
-
 ## 6. Tech Stack — Per Phase
 
 ### Phase 1 — Pure TypeScript
@@ -366,19 +347,6 @@ Python core (new):
 | `Pydantic v2` | Output validation | Validates LLM structured outputs with type safety |
 | `asyncio` | Subprocess | Non-blocking reads from VS Code's Node process |
 | `uv` | Python env mgmt | Fastest Python package manager — replaces pip/venv |
-
----
-
-### Phase 4 — Full Stack
-
-Everything from Phase 3, plus:
-
-| Technology | Layer | Why |
-|---|---|---|
-| `httpx` (Python) | CodeVantage API | Async HTTP client |
-| `FastAPI` (Python) | Proxy backend | LLM proxy so users don't need their own API key |
-| OpenAI Python SDK | Multi-LLM | Alternative LLM provider via same interface |
-| Ollama Python client | Local models | Privacy-focused users, no API key needed |
 
 ---
 
@@ -685,10 +653,6 @@ PHASE 3 (Python Bridge)
   Stack:     Thin TS shell + Python subprocess (JSON-RPC)
   Python:    Anthropic SDK, GitPython, sqlite3, Pydantic, asyncio
   Goal:      AI engineering skills, richer logic
-
-PHASE 4 (CodeVantage)
-  Adds:      httpx, FastAPI, OpenAI SDK, Ollama
-  Goal:      Extension as CodeVantage capture layer
 
 PUBLISH
   1. Microsoft account + Azure DevOps
