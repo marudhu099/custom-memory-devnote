@@ -81,24 +81,68 @@ All uncommitted changes — both staged and unstaged. This captures the full pic
         ↓
 [Preview to User]
         ↓
-[User Approves / Edits]
+[User clicks "Save Note"]
         ↓
-[Save to custom_memory_note.md]   ← Local only, gitignored
-  Note saved locally for review
+[Save to custom_memory_note.md]   ← Local safety net, gitignored
+  Saved first so sync failures never lose work
         ↓
-── sync (separate manual trigger in MVP) ──
+[Query Notion: does a page with this title exist?]
         ↓
-[User Triggers Sync Command]      ← Manual in MVP, automatic later
-        ↓
+    ┌───┴───┐
+    ↓       ↓
+   NO      YES
+    ↓       ↓
+    │   [Show popup: Append / Replace / Cancel]
+    │       │
+    │       ├─ Append  → add new blocks to existing page
+    │       ├─ Replace → delete old blocks + add new blocks (same page ID)
+    │       └─ Cancel  → abort, keep local file, notify
+    │       │
+    └───────┤
+            ↓
 [LLM Structures Data for Notion]
         ↓
 [Push to Notion API]
         ↓
-[Delete local custom_memory_note.md]
+[Delete local custom_memory_note.md]  ← only on success
+        ↓
+[Show success notification]
+        ↓
+── fallback paths ─────────────────────────────────────────
+        ↓
+[If Notion query/push fails]
+  Show error: "Failed — note saved locally. Please try again with Ctrl+Alt+M"
+  Keep custom_memory_note.md in place
+        ↓
+[Ctrl+Alt+M — manual sync retry]     ← Kept for retries and offline cases
         ↓
 [Background Indexer Runs]         ← Phase 2 addition
   Writes metadata to local SQLite index
 ```
+
+### Key behavior — Save Note auto-syncs
+
+As of the first Phase 1 enhancement, clicking **Save Note** in the preview panel automatically triggers the Notion sync using the title the user already provided. The user does **not** need to press `Ctrl+Alt+M` in the happy path — it's kept only as a retry command for sync failures and offline cases.
+
+### Duplicate title handling
+
+Before creating a new Notion page, the extension queries the configured database to check whether a page with the same title already exists:
+
+- **No match** → create a new page, done
+- **Match found** → show a Quick Pick popup with three options:
+  - **Append** — add the new note's blocks at the bottom of the existing page (running log of the feature)
+  - **Replace** — delete all blocks from the existing page, then add the new blocks (same page ID preserved, URL stays valid)
+  - **Cancel** — abort the sync, keep the local file, user can retry later with `Ctrl+Alt+M`
+
+### Error handling
+
+If any Notion API call fails (network, auth, rate limit, duplicate-check query, block operations), the extension:
+
+1. Shows a clear error notification
+2. **Explicitly tells the user to retry with `Ctrl+Alt+M`**
+3. Leaves `custom_memory_note.md` in place so nothing is lost
+
+The local file is only ever deleted after a successful Notion sync.
 
 ### Why local file + Notion (not git commit attachment)
 
