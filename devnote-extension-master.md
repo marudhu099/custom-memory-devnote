@@ -61,10 +61,11 @@ This extension is the capture layer for **CodeVantage** (your self-healing docum
   Shortcut: Ctrl + Alt + D
         ↓
 [Check Git Availability]
-  Repo exists? Changes exist?
+  Repo exists? On a feature branch?
         ↓
 [Collect Git Context]
-  git diff (staged + unstaged — all uncommitted changes)
+  Primary: git diff main...HEAD (entire branch diff)
+  Secondary: staged + unstaged (if any uncommitted changes)
         ↓
 [Query Memory Index]              ← Phase 2 addition
   Past notes for same files

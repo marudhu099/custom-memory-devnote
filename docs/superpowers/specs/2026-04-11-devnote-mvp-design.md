@@ -17,8 +17,9 @@ Decoupled by design. The create flow and sync flow are independent. When sync mo
 ### Command 1 — Create Note (`Ctrl+Alt+D`)
 
 ```
-GitService.checkAvailability()    → repo exists? changes exist?
-GitService.getDiff()              → staged + unstaged diff
+GitService.checkAvailability()    → repo exists? on a branch?
+GitService.getBranchDiff()        → git diff main...HEAD (primary — entire branch)
+GitService.getUncommittedDiff()   → staged + unstaged (secondary — if any)
 User input                        → title + optional notes
 LLMService.generateNote()         → Gemini generates structured note
 UIService.showPreview()           → webview preview panel
@@ -75,8 +76,10 @@ devnote/
 
 ### GitService
 
-- `checkAvailability()`: Confirms workspace is a git repo and has uncommitted changes
-- `getDiff()`: Returns `{ staged: string, unstaged: string, filesChanged: string[] }`
+- `checkAvailability()`: Confirms workspace is a git repo and has changes (branch diff or uncommitted)
+- `isOnMainBranch()`: Returns whether current branch is main/master
+- `getBranchDiff()`: Returns `{ branchDiff: string, filesChanged: string[], commitCount: number }` — entire branch diff vs main (primary)
+- `getUncommittedDiff()`: Returns `{ staged: string, unstaged: string, filesChanged: string[] }` — uncommitted changes (secondary/fallback)
 - Uses `simple-git` npm package
 
 ### ConfigService
@@ -156,7 +159,11 @@ devnote/
 
 ## Git Changes Captured
 
-Both staged and unstaged changes — all uncommitted work. This captures the full picture of what the developer worked on.
+**Primary:** Branch diff vs main (`git diff main...HEAD`) — the entire branch's changes across all commits. This is the same diff you see in a PR.
+
+**Secondary:** Uncommitted changes (staged + unstaged) — included alongside the branch diff if any exist.
+
+**Fallback:** If on main branch, only uncommitted changes are captured.
 
 ---
 
