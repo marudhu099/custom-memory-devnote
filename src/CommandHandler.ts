@@ -102,11 +102,150 @@ export class CommandHandler {
       return;
     }
 
+    // Save locally as safety net
     const noteService = new NoteService(this.workspacePath);
     noteService.save(note);
-    vscode.window.showInformationMessage(
-      'DevNote: Note saved! Use Ctrl+Alt+M to sync to Notion.'
-    );
+
+    // Check Notion config
+    const notionToken = await this.configService.getNotionToken();
+    if (!notionToken) {
+      vscode.window.showWarningMessage(
+        'DevNote: Note saved locally. Set Notion token with "DevNote: Set Notion Token" to enable sync.'
+      );
+      return;
+    }
+
+    const databaseId = this.configService.getNotionDatabaseId();
+    if (!databaseId) {
+      vscode.window.showWarningMessage(
+        'DevNote: Note saved locally. Set "devnote.notionDatabaseId" in settings to enable sync.'
+      );
+      return;
+    }
+
+    // Structure note for Notion (reuses Gemini key from earlier)
+    const noteContent = noteService.read();
+    let structuredContent: string;
+    try {
+      structuredContent = await llmService.structureForNotion(noteContent);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      vscode.window.showErrorMessage(
+        `DevNote: Note saved locally. Failed to structure for Notion — ${message}. Please try again with Ctrl+Alt+M.`
+      );
+      return;
+    }
+
+    // Check for duplicate title in Notion
+    const notionService = new NotionService(notionToken, databaseId);
+    let existingPageId: string | null;
+    try {
+      existingPageId = await notionService.findPageByTitle(title);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      vscode.window.showErrorMessage(
+        `DevNote: Failed to check for duplicate titles — ${message}. Your note is saved locally. Please try again with Ctrl+Alt+M.`
+      );
+      return;
+    }
+
+    // Branch on duplicate / no duplicate
+    if (existingPageId === null) {
+      // No duplicate — create new page
+      try {
+        await notionService.push(title, structuredContent);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(
+          `DevNote: Failed to create Notion page — ${message}. Your note is saved locally. Please try again with Ctrl+Alt+M.`
+        );
+        return;
+      }
+
+      noteService.delete();
+      vscode.window.showInformationMessage(
+        'DevNote: Note synced to Notion as a new page.'
+      );
+      return;
+    }
+
+    // Duplicate found — ask user what to do
+    const choice = await this.showDuplicateChoicePopup(title);
+
+    if (choice === 'cancel' || choice === undefined) {
+      vscode.window.showInformationMessage(
+        'DevNote: Sync cancelled. Your note is saved locally — use Ctrl+Alt+M to sync later.'
+      );
+      return;
+    }
+
+    if (choice === 'append') {
+      try {
+        await notionService.appendBlocksToPage(existingPageId, structuredContent);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(
+          `DevNote: Failed to append to existing Notion page — ${message}. Your note is saved locally. Please try again with Ctrl+Alt+M.`
+        );
+        return;
+      }
+
+      noteService.delete();
+      vscode.window.showInformationMessage(
+        `DevNote: Note appended to existing Notion page "${title}".`
+      );
+      return;
+    }
+
+    if (choice === 'replace') {
+      try {
+        await notionService.replacePageBlocks(existingPageId, structuredContent);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(
+          `DevNote: Failed to replace Notion page content — ${message}. Your note is saved locally. Please try again with Ctrl+Alt+M.`
+        );
+        return;
+      }
+
+      noteService.delete();
+      vscode.window.showInformationMessage(
+        `DevNote: Notion page "${title}" replaced with new content.`
+      );
+      return;
+    }
+  }
+
+  private async showDuplicateChoicePopup(title: string): Promise<'append' | 'replace' | 'cancel' | undefined> {
+    type PopupItem = vscode.QuickPickItem & { value: 'append' | 'replace' | 'cancel' };
+
+    const items: PopupItem[] = [
+      {
+        label: '$(add) Append',
+        description: 'Add new content below the existing page',
+        detail: 'Keeps history — old content is preserved, new content is added at the bottom',
+        value: 'append',
+      },
+      {
+        label: '$(replace-all) Replace',
+        description: 'Delete old content and replace with new',
+        detail: 'Keeps the same page URL, but old content is removed',
+        value: 'replace',
+      },
+      {
+        label: '$(close) Cancel',
+        description: 'Abort sync and keep the local file',
+        detail: 'You can retry later with Ctrl+Alt+M',
+        value: 'cancel',
+      },
+    ];
+
+    const selection = await vscode.window.showQuickPick(items, {
+      placeHolder: `A page titled "${title}" already exists in Notion. What should we do?`,
+      ignoreFocusOut: true,
+    });
+
+    return selection?.value;
   }
 
   async handleSync(): Promise<void> {

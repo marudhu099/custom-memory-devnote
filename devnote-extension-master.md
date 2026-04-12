@@ -37,10 +37,6 @@ Notes are saved locally as `custom_memory_note.md` (gitignored — never committ
 
 All uncommitted changes — both staged and unstaged. This captures the full picture of what the developer worked on, not just what they chose to stage.
 
-### The bigger picture
-
-This extension is the capture layer for **CodeVantage** (your self-healing documentation platform). Dev notes generated from git diffs are pre-documentation — structured, timestamped, file-linked developer context. The extension feeds CodeVantage's pipeline, making it smarter over time.
-
 ---
 
 ## 2. Execution Flow
@@ -85,24 +81,68 @@ This extension is the capture layer for **CodeVantage** (your self-healing docum
         ↓
 [Preview to User]
         ↓
-[User Approves / Edits]
+[User clicks "Save Note"]
         ↓
-[Save to custom_memory_note.md]   ← Local only, gitignored
-  Note saved locally for review
+[Save to custom_memory_note.md]   ← Local safety net, gitignored
+  Saved first so sync failures never lose work
         ↓
-── sync (separate manual trigger in MVP) ──
+[Query Notion: does a page with this title exist?]
         ↓
-[User Triggers Sync Command]      ← Manual in MVP, automatic later
-        ↓
+    ┌───┴───┐
+    ↓       ↓
+   NO      YES
+    ↓       ↓
+    │   [Show popup: Append / Replace / Cancel]
+    │       │
+    │       ├─ Append  → add new blocks to existing page
+    │       ├─ Replace → delete old blocks + add new blocks (same page ID)
+    │       └─ Cancel  → abort, keep local file, notify
+    │       │
+    └───────┤
+            ↓
 [LLM Structures Data for Notion]
         ↓
 [Push to Notion API]
         ↓
-[Delete local custom_memory_note.md]
+[Delete local custom_memory_note.md]  ← only on success
+        ↓
+[Show success notification]
+        ↓
+── fallback paths ─────────────────────────────────────────
+        ↓
+[If Notion query/push fails]
+  Show error: "Failed — note saved locally. Please try again with Ctrl+Alt+M"
+  Keep custom_memory_note.md in place
+        ↓
+[Ctrl+Alt+M — manual sync retry]     ← Kept for retries and offline cases
         ↓
 [Background Indexer Runs]         ← Phase 2 addition
   Writes metadata to local SQLite index
 ```
+
+### Key behavior — Save Note auto-syncs
+
+As of the first Phase 1 enhancement, clicking **Save Note** in the preview panel automatically triggers the Notion sync using the title the user already provided. The user does **not** need to press `Ctrl+Alt+M` in the happy path — it's kept only as a retry command for sync failures and offline cases.
+
+### Duplicate title handling
+
+Before creating a new Notion page, the extension queries the configured database to check whether a page with the same title already exists:
+
+- **No match** → create a new page, done
+- **Match found** → show a Quick Pick popup with three options:
+  - **Append** — add the new note's blocks at the bottom of the existing page (running log of the feature)
+  - **Replace** — delete all blocks from the existing page, then add the new blocks (same page ID preserved, URL stays valid)
+  - **Cancel** — abort the sync, keep the local file, user can retry later with `Ctrl+Alt+M`
+
+### Error handling
+
+If any Notion API call fails (network, auth, rate limit, duplicate-check query, block operations), the extension:
+
+1. Shows a clear error notification
+2. **Explicitly tells the user to retry with `Ctrl+Alt+M`**
+3. Leaves `custom_memory_note.md` in place so nothing is lost
+
+The local file is only ever deleted after a successful Notion sync.
 
 ### Why local file + Notion (not git commit attachment)
 
@@ -303,21 +343,6 @@ Once you have the index, you can surface insights:
 
 ---
 
-### Phase 4 — CodeVantage Pipeline
-
-**Goal:** Extension becomes the capture layer for CodeVantage. Python core is reused directly.
-
-**Build:**
-- `sync_service.py` — pushes notes to CodeVantage API after each save
-- Proxy API backend — CodeVantage hosts LLM calls, no user API key needed
-- Team dashboard — notes across the whole org
-- Multi-LLM support via existing `LLMService` interface (OpenAI, Ollama)
-- Open VSX publish (Cursor, VSCodium, Windsurf users)
-
-**The big payoff:** The same `git_service.py`, `llm_service.py`, `memory_service.py` you built in Phase 3 plug directly into CodeVantage's backend. Zero rewrite. You built the library once and used it in two products.
-
----
-
 ## 6. Tech Stack — Per Phase
 
 ### Phase 1 — Pure TypeScript
@@ -366,19 +391,6 @@ Python core (new):
 | `Pydantic v2` | Output validation | Validates LLM structured outputs with type safety |
 | `asyncio` | Subprocess | Non-blocking reads from VS Code's Node process |
 | `uv` | Python env mgmt | Fastest Python package manager — replaces pip/venv |
-
----
-
-### Phase 4 — Full Stack
-
-Everything from Phase 3, plus:
-
-| Technology | Layer | Why |
-|---|---|---|
-| `httpx` (Python) | CodeVantage API | Async HTTP client |
-| `FastAPI` (Python) | Proxy backend | LLM proxy so users don't need their own API key |
-| OpenAI Python SDK | Multi-LLM | Alternative LLM provider via same interface |
-| Ollama Python client | Local models | Privacy-focused users, no API key needed |
 
 ---
 
@@ -685,10 +697,6 @@ PHASE 3 (Python Bridge)
   Stack:     Thin TS shell + Python subprocess (JSON-RPC)
   Python:    Anthropic SDK, GitPython, sqlite3, Pydantic, asyncio
   Goal:      AI engineering skills, richer logic
-
-PHASE 4 (CodeVantage)
-  Adds:      httpx, FastAPI, OpenAI SDK, Ollama
-  Goal:      Extension as CodeVantage capture layer
 
 PUBLISH
   1. Microsoft account + Azure DevOps

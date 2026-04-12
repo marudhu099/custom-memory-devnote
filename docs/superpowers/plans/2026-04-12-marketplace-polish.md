@@ -359,7 +359,7 @@ Replace the entire `package.json` content with this (preserves all existing fiel
   "displayName": "DevNote",
   "description": "AI-generated dev notes from git diffs. Save locally, sync to Notion, never lose context again.",
   "version": "0.1.0",
-  "publisher": "codevantage",
+  "publisher": "marudhu099",
   "author": "Marudhupandiyan",
   "license": "MIT",
   "icon": "asset/icon.png",
