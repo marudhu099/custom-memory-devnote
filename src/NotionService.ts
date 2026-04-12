@@ -34,6 +34,43 @@ export class NotionService {
     }
   }
 
+  async findPageByTitle(title: string): Promise<string | null> {
+    const body = {
+      filter: {
+        property: 'Name',
+        title: {
+          equals: title,
+        },
+      },
+      page_size: 1,
+    };
+
+    const response = await fetch(
+      `https://api.notion.com/v1/databases/${this.databaseId}/query`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          'Content-Type': 'application/json',
+          'Notion-Version': '2022-06-28',
+        },
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Notion API error (${response.status}): ${error}`);
+    }
+
+    const data = (await response.json()) as { results: Array<{ id: string }> };
+    if (data.results.length === 0) {
+      return null;
+    }
+
+    return data.results[0].id;
+  }
+
   private markdownToBlocks(content: string): object[] {
     const lines = content.split('\n');
     const blocks: object[] = [];
