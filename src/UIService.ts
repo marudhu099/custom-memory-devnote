@@ -24,18 +24,27 @@ export class UIService {
       html = html.replace('{{NOTE_DATA}}', JSON.stringify(note));
       panel.webview.html = html;
 
+      let resolved = false;
+
       panel.webview.onDidReceiveMessage((message) => {
+        if (resolved) {
+          return;
+        }
         if (message.command === 'approve') {
-          panel.dispose();
+          resolved = true;
           resolve(true);
-        } else if (message.command === 'reject') {
           panel.dispose();
+        } else if (message.command === 'reject') {
+          resolved = true;
           resolve(false);
+          panel.dispose();
         }
       });
 
       panel.onDidDispose(() => {
-        resolve(false);
+        if (!resolved) {
+          resolve(false);
+        }
       });
     });
   }

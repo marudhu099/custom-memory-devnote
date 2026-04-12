@@ -111,7 +111,7 @@ git commit -m "chore: add gitignore and register all MVP commands in package.jso
 
 ---
 
-## Task 2: GitService — Read git diff
+## Task 2: GitService — Read branch diff and uncommitted changes
 
 **Files:**
 - Rewrite: `src/GitService.ts`
@@ -122,14 +122,20 @@ git commit -m "chore: add gitignore and register all MVP commands in package.jso
 // src/GitService.ts
 import simpleGit, { SimpleGit } from 'simple-git';
 
-export interface DiffResult {
+export interface BranchDiffResult {
+  branchDiff: string;
+  filesChanged: string[];
+  commitCount: number;
+}
+
+export interface UncommittedDiffResult {
   staged: string;
   unstaged: string;
   filesChanged: string[];
 }
 
 export class GitService {
-  private git: SimpleGit;
+  private readonly git: SimpleGit;
 
   constructor(workspacePath: string) {
     this.git = simpleGit(workspacePath);
@@ -141,32 +147,56 @@ export class GitService {
       return { available: false, reason: 'Not a git repository' };
     }
 
-    const status = await this.git.status();
-    const hasChanges =
-      status.modified.length > 0 ||
-      status.not_added.length > 0 ||
-      status.staged.length > 0 ||
-      status.renamed.length > 0 ||
-      status.deleted.length > 0;
+    // Check if on main — nothing to document
+    const branch = await this.git.revparse(['--abbrev-ref', 'HEAD']);
+    if (branch.trim() === 'main' || branch.trim() === 'master') {
+      // On main — check for uncommitted changes as fallback
+      const status = await this.git.status();
+      const hasChanges =
+        status.modified.length > 0 ||
+        status.not_added.length > 0 ||
+        status.staged.length > 0 ||
+        status.renamed.length > 0 ||
+        status.deleted.length > 0;
 
-    if (!hasChanges) {
-      return { available: false, reason: 'No uncommitted changes found' };
+      if (!hasChanges) {
+        return { available: false, reason: 'On main branch with no uncommitted changes' };
+      }
+
+      return { available: true };
     }
 
     return { available: true };
   }
 
-  async getDiff(): Promise<DiffResult> {
+  async isOnMainBranch(): Promise<boolean> {
+    const branch = await this.git.revparse(['--abbrev-ref', 'HEAD']);
+    const name = branch.trim();
+    return name === 'main' || name === 'master';
+  }
+
+  async getBranchDiff(): Promise<BranchDiffResult> {
+    const branchDiff = await this.git.diff(['main...HEAD']);
+    const diffStat = await this.git.diff(['main...HEAD', '--name-only']);
+    const filesChanged = diffStat.trim().split('\n').filter(Boolean);
+
+    const log = await this.git.log(['main..HEAD']);
+    const commitCount = log.total;
+
+    return { branchDiff, filesChanged, commitCount };
+  }
+
+  async getUncommittedDiff(): Promise<UncommittedDiffResult> {
     const staged = await this.git.diff(['--cached']);
     const unstaged = await this.git.diff();
-
     const status = await this.git.status();
+
     const filesChanged = [
       ...new Set([
         ...status.modified,
         ...status.not_added,
         ...status.staged,
-        ...status.renamed.map((r) => r.to),
+        ...status.renamed.map((entry) => entry.to),
         ...status.deleted,
       ]),
     ];
@@ -257,11 +287,13 @@ git commit -m "feat: implement ConfigService with SecretStorage for API keys"
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export interface NotePayload {
-  staged: string;
-  unstaged: string;
+  branchDiff: string;
   filesChanged: string[];
+  commitCount: number;
   title: string;
   userNotes?: string;
+  uncommittedStaged?: string;
+  uncommittedUnstaged?: string;
 }
 
 export interface StructuredNote {
@@ -290,18 +322,26 @@ export class GeminiLLMService implements LLMService {
     const genAI = new GoogleGenerativeAI(this.apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-    const prompt = `You are a developer documentation assistant. Analyze the following git diff and generate a structured developer note.
+    let uncommittedSection = '';
+    if (payload.uncommittedStaged || payload.uncommittedUnstaged) {
+      uncommittedSection = `
+
+Uncommitted staged changes:
+${payload.uncommittedStaged || '(none)'}
+
+Uncommitted unstaged changes:
+${payload.uncommittedUnstaged || '(none)'}`;
+    }
+
+    const prompt = `You are a developer documentation assistant. Analyze the following git diff from a feature branch and generate a structured developer note. This diff represents the entire branch compared to main (${payload.commitCount} commit(s)).
 
 Title: ${payload.title}
 ${payload.userNotes ? `Developer notes: ${payload.userNotes}` : ''}
 
 Files changed: ${payload.filesChanged.join(', ')}
 
-Staged changes:
-${payload.staged || '(none)'}
-
-Unstaged changes:
-${payload.unstaged || '(none)'}
+Branch diff (all changes vs main):
+${payload.branchDiff || '(none)'}${uncommittedSection}
 
 Respond in this exact JSON format (no markdown fences, just raw JSON):
 {
@@ -696,7 +736,7 @@ git commit -m "feat: implement UIService with webview preview panel"
 import * as vscode from 'vscode';
 import { GitService } from './GitService';
 import { ConfigService } from './ConfigService';
-import { GeminiLLMService } from './LLMService';
+import { GeminiLLMService, NotePayload } from './LLMService';
 import { NoteService } from './NoteService';
 import { NotionService } from './NotionService';
 import { UIService } from './UIService';
@@ -734,8 +774,42 @@ export class CommandHandler {
       return;
     }
 
-    // 3. Get diff
-    const diff = await gitService.getDiff();
+    // 3. Build payload — branch diff is primary, uncommitted is secondary
+    const onMain = await gitService.isOnMainBranch();
+    let payload: NotePayload;
+
+    if (onMain) {
+      // Fallback: on main, use uncommitted changes only
+      const uncommitted = await gitService.getUncommittedDiff();
+      payload = {
+        branchDiff: '',
+        filesChanged: uncommitted.filesChanged,
+        commitCount: 0,
+        title: '', // filled below
+        uncommittedStaged: uncommitted.staged,
+        uncommittedUnstaged: uncommitted.unstaged,
+      };
+    } else {
+      // Primary: branch diff vs main
+      const branchDiff = await gitService.getBranchDiff();
+      payload = {
+        branchDiff: branchDiff.branchDiff,
+        filesChanged: branchDiff.filesChanged,
+        commitCount: branchDiff.commitCount,
+        title: '', // filled below
+      };
+
+      // Also include uncommitted changes if any exist
+      const uncommitted = await gitService.getUncommittedDiff();
+      if (uncommitted.staged || uncommitted.unstaged) {
+        payload.uncommittedStaged = uncommitted.staged;
+        payload.uncommittedUnstaged = uncommitted.unstaged;
+
+        // Merge uncommitted file changes into the list
+        const allFiles = new Set([...payload.filesChanged, ...uncommitted.filesChanged]);
+        payload.filesChanged = [...allFiles];
+      }
+    }
 
     // 4. Get user input
     const title = await vscode.window.showInputBox({
@@ -745,23 +819,19 @@ export class CommandHandler {
     if (!title) {
       return; // User cancelled
     }
+    payload.title = title;
 
     const userNotes = await vscode.window.showInputBox({
       prompt: 'Any additional notes? (optional — press Enter to skip)',
       placeHolder: 'Context, decisions, things to remember...',
     });
+    payload.userNotes = userNotes || undefined;
 
     // 5. Generate note via LLM
     const llmService = new GeminiLLMService(apiKey);
     let note;
     try {
-      note = await llmService.generateNote({
-        staged: diff.staged,
-        unstaged: diff.unstaged,
-        filesChanged: diff.filesChanged,
-        title,
-        userNotes: userNotes || undefined,
-      });
+      note = await llmService.generateNote(payload);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       vscode.window.showErrorMessage(

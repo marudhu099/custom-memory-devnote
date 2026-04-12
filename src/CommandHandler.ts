@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { GitService } from './GitService';
 import { ConfigService } from './ConfigService';
-import { GeminiLLMService } from './LLMService';
+import { GeminiLLMService, NotePayload } from './LLMService';
 import { NoteService } from './NoteService';
 import { NotionService } from './NotionService';
 import { UIService } from './UIService';
@@ -18,7 +18,6 @@ export class CommandHandler {
   }
 
   async handleCreate(): Promise<void> {
-    // 1. Check git availability
     const gitService = new GitService(this.workspacePath);
     const availability = await gitService.checkAvailability();
     if (!availability.available) {
@@ -26,7 +25,6 @@ export class CommandHandler {
       return;
     }
 
-    // 2. Get API key
     const apiKey = await this.configService.getGeminiApiKey();
     if (!apiKey) {
       const action = await vscode.window.showErrorMessage(
@@ -39,34 +37,57 @@ export class CommandHandler {
       return;
     }
 
-    // 3. Get diff
-    const diff = await gitService.getDiff();
+    const onBase = await gitService.isOnBaseBranch();
+    let payload: NotePayload;
 
-    // 4. Get user input
+    if (onBase) {
+      const uncommitted = await gitService.getUncommittedDiff();
+      payload = {
+        branchDiff: '',
+        filesChanged: uncommitted.filesChanged,
+        commitCount: 0,
+        title: '',
+        uncommittedStaged: uncommitted.staged,
+        uncommittedUnstaged: uncommitted.unstaged,
+      };
+    } else {
+      const branchDiff = await gitService.getBranchDiff();
+      payload = {
+        branchDiff: branchDiff.branchDiff,
+        filesChanged: branchDiff.filesChanged,
+        commitCount: branchDiff.commitCount,
+        title: '',
+      };
+
+      const uncommitted = await gitService.getUncommittedDiff();
+      if (uncommitted.staged || uncommitted.unstaged) {
+        payload.uncommittedStaged = uncommitted.staged;
+        payload.uncommittedUnstaged = uncommitted.unstaged;
+
+        const allFiles = new Set([...payload.filesChanged, ...uncommitted.filesChanged]);
+        payload.filesChanged = [...allFiles];
+      }
+    }
+
     const title = await vscode.window.showInputBox({
       prompt: 'Dev note title',
       placeHolder: 'What did you work on?',
     });
     if (!title) {
-      return; // User cancelled
+      return;
     }
+    payload.title = title;
 
     const userNotes = await vscode.window.showInputBox({
       prompt: 'Any additional notes? (optional — press Enter to skip)',
       placeHolder: 'Context, decisions, things to remember...',
     });
+    payload.userNotes = userNotes || undefined;
 
-    // 5. Generate note via LLM
     const llmService = new GeminiLLMService(apiKey);
     let note;
     try {
-      note = await llmService.generateNote({
-        staged: diff.staged,
-        unstaged: diff.unstaged,
-        filesChanged: diff.filesChanged,
-        title,
-        userNotes: userNotes || undefined,
-      });
+      note = await llmService.generateNote(payload);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       vscode.window.showErrorMessage(
@@ -75,14 +96,12 @@ export class CommandHandler {
       return;
     }
 
-    // 6. Preview
     const approved = await this.uiService.showPreview(note);
     if (!approved) {
       vscode.window.showInformationMessage('DevNote: Note discarded.');
       return;
     }
 
-    // 7. Save locally
     const noteService = new NoteService(this.workspacePath);
     noteService.save(note);
     vscode.window.showInformationMessage(
@@ -91,7 +110,6 @@ export class CommandHandler {
   }
 
   async handleSync(): Promise<void> {
-    // 1. Check if note exists
     const noteService = new NoteService(this.workspacePath);
     if (!noteService.exists()) {
       vscode.window.showErrorMessage(
@@ -100,7 +118,6 @@ export class CommandHandler {
       return;
     }
 
-    // 2. Check Notion config
     const notionToken = await this.configService.getNotionToken();
     if (!notionToken) {
       const action = await vscode.window.showErrorMessage(
@@ -121,10 +138,8 @@ export class CommandHandler {
       return;
     }
 
-    // 3. Read note
     const noteContent = noteService.read();
 
-    // 4. Get API key for LLM structuring
     const apiKey = await this.configService.getGeminiApiKey();
     if (!apiKey) {
       vscode.window.showErrorMessage(
@@ -133,7 +148,6 @@ export class CommandHandler {
       return;
     }
 
-    // 5. Structure for Notion via LLM
     const llmService = new GeminiLLMService(apiKey);
     let structuredContent: string;
     try {
@@ -146,10 +160,8 @@ export class CommandHandler {
       return;
     }
 
-    // 6. Push to Notion
     const notionService = new NotionService(notionToken, databaseId);
     try {
-      // Extract title from frontmatter
       const titleMatch = noteContent.match(/^title:\s*(.+)$/m);
       const title = titleMatch ? titleMatch[1].trim() : 'DevNote';
       await notionService.push(title, structuredContent);
@@ -158,10 +170,9 @@ export class CommandHandler {
       vscode.window.showErrorMessage(
         `DevNote: Sync failed — ${message}`
       );
-      return; // Do NOT delete local file
+      return;
     }
 
-    // 7. Delete local file only after successful sync
     noteService.delete();
     vscode.window.showInformationMessage('DevNote: Note synced to Notion!');
   }

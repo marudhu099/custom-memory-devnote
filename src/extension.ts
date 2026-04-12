@@ -1,6 +1,3 @@
-// DevNote — Entry Point
-// This is like your server.js — just wires everything up, no business logic here.
-
 import * as vscode from 'vscode';
 import { CommandHandler } from './CommandHandler';
 import { ConfigService } from './ConfigService';
@@ -16,12 +13,22 @@ export function activate(context: vscode.ExtensionContext) {
   const uiService = new UIService(context.extensionPath);
   const handler = new CommandHandler(configService, uiService, workspacePath);
 
-  const createCommand = vscode.commands.registerCommand('devnote.create', () => {
-    void handler.handleCreate();
+  const createCommand = vscode.commands.registerCommand('devnote.create', async () => {
+    try {
+      await handler.handleCreate();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`DevNote: ${msg}`);
+    }
   });
 
-  const syncCommand = vscode.commands.registerCommand('devnote.sync', () => {
-    void handler.handleSync();
+  const syncCommand = vscode.commands.registerCommand('devnote.sync', async () => {
+    try {
+      await handler.handleSync();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`DevNote: ${msg}`);
+    }
   });
 
   const setGeminiKeyCommand = vscode.commands.registerCommand(

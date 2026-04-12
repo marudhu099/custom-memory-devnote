@@ -1,11 +1,13 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export interface NotePayload {
-  staged: string;
-  unstaged: string;
+  branchDiff: string;
   filesChanged: string[];
+  commitCount: number;
   title: string;
   userNotes?: string;
+  uncommittedStaged?: string;
+  uncommittedUnstaged?: string;
 }
 
 export interface StructuredNote {
@@ -34,18 +36,26 @@ export class GeminiLLMService implements LLMService {
     const genAI = new GoogleGenerativeAI(this.apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-    const prompt = `You are a developer documentation assistant. Analyze the following git diff and generate a structured developer note.
+    let uncommittedSection = '';
+    if (payload.uncommittedStaged || payload.uncommittedUnstaged) {
+      uncommittedSection = `
+
+Uncommitted staged changes:
+${payload.uncommittedStaged || '(none)'}
+
+Uncommitted unstaged changes:
+${payload.uncommittedUnstaged || '(none)'}`;
+    }
+
+    const prompt = `You are a developer documentation assistant. Analyze the following git diff from a feature branch and generate a structured developer note. This diff represents the entire branch compared to main (${payload.commitCount} commit(s)).
 
 Title: ${payload.title}
 ${payload.userNotes ? `Developer notes: ${payload.userNotes}` : ''}
 
 Files changed: ${payload.filesChanged.join(', ')}
 
-Staged changes:
-${payload.staged || '(none)'}
-
-Unstaged changes:
-${payload.unstaged || '(none)'}
+Branch diff (all changes vs main):
+${payload.branchDiff || '(none)'}${uncommittedSection}
 
 Respond in this exact JSON format (no markdown fences, just raw JSON):
 {
