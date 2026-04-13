@@ -360,6 +360,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     } else if (from === 'setup') {
       // Setup → wherever handleReady decides (idle if configured, stays in setup otherwise).
       await this.handleReady();
+    } else if (from === 'success') {
+      // Success → Idle. Clear note state and return to a fresh idle screen.
+      this.currentNote = null;
+      this.pendingFormData = null;
+      this.currentDuplicatePageId = null;
+      this.cachedStructuredContent = null;
+      await this.refreshIdleState();
     }
   }
 
@@ -428,20 +435,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       await notionService.push(this.pendingFormData.title, structuredContent);
       if (this.syncAbortController?.signal.aborted) return;
 
-      // Success
+      // Success — stays on the success state until the user clicks "Back to Generate Doc".
       await this.draftStore.clear();
       this.postMessage({
         type: 'setState',
         state: 'success',
         data: { message: 'You got it! Note synced to Notion.' },
       });
-
-      // Auto-transition to idle after 3 seconds
-      setTimeout(() => {
-        this.currentNote = null;
-        this.pendingFormData = null;
-        void this.refreshIdleState();
-      }, 3000);
     } catch (err) {
       if (this.syncAbortController?.signal.aborted) return;
       const detail = err instanceof Error ? err.message : String(err);
@@ -551,14 +551,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         state: 'success',
         data: { message: successMessage },
       });
-
-      setTimeout(() => {
-        this.currentNote = null;
-        this.pendingFormData = null;
-        this.currentDuplicatePageId = null;
-        this.cachedStructuredContent = null;
-        void this.refreshIdleState();
-      }, 3000);
+      // Stays on success state until the user clicks "Back to Generate Doc".
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       const friendlyMessage = choice === 'append'

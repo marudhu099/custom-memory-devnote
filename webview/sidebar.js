@@ -110,6 +110,11 @@
     vscode.postMessage({ type: 'clickBack', from: 'setup' });
   });
 
+  // Success state listener
+  document.getElementById('success-back').addEventListener('click', () => {
+    vscode.postMessage({ type: 'clickBack', from: 'success' });
+  });
+
   // Idle state listeners
   document.getElementById('generate-button').addEventListener('click', () => {
     vscode.postMessage({ type: 'clickGenerate' });
