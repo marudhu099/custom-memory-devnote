@@ -2,14 +2,35 @@ import * as vscode from 'vscode';
 import { CommandHandler } from './CommandHandler';
 import { ConfigService } from './ConfigService';
 import { UIService } from './UIService';
+import { SidebarProvider } from './SidebarProvider';
+import { DraftStore } from './DraftStore';
 
 export function activate(context: vscode.ExtensionContext) {
   const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+  const configService = new ConfigService(context.secrets);
+  const draftStore = new DraftStore(context);
+
+  // Register the new sidebar provider (works without a workspace)
+  const sidebarProvider = new SidebarProvider(
+    context.extensionUri,
+    context,
+    configService,
+    draftStore
+  );
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      SidebarProvider.viewType,
+      sidebarProvider
+    )
+  );
+
+  // Old command-based flow — kept temporarily during the transition
   if (!workspacePath) {
     return;
   }
 
-  const configService = new ConfigService(context.secrets);
   const uiService = new UIService(context.extensionPath);
   const handler = new CommandHandler(configService, uiService, workspacePath);
 
@@ -39,11 +60,7 @@ export function activate(context: vscode.ExtensionContext) {
         placeHolder: 'Paste your API key here',
         password: true,
       });
-
-      if (!key) {
-        return;
-      }
-
+      if (!key) return;
       await configService.setGeminiApiKey(key);
       vscode.window.showInformationMessage('DevNote: Gemini API key saved.');
     }
@@ -57,11 +74,7 @@ export function activate(context: vscode.ExtensionContext) {
         placeHolder: 'Paste your Notion token here',
         password: true,
       });
-
-      if (!token) {
-        return;
-      }
-
+      if (!token) return;
       await configService.setNotionToken(token);
       vscode.window.showInformationMessage('DevNote: Notion token saved.');
     }
