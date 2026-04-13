@@ -35,6 +35,25 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "devnote-sidebar",
+          "title": "DevNote",
+          "icon": "asset/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "devnote-sidebar": [
+        {
+          "type": "webview",
+          "id": "devnote.sidebar",
+          "name": "DevNote",
+          "icon": "asset/icon.png"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "devnote.create",
