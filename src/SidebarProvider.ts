@@ -6,6 +6,7 @@ import { ConfigService } from './ConfigService';
 import { DraftStore } from './DraftStore';
 import { GitService } from './GitService';
 import { GeminiLLMService, NotePayload, StructuredNote } from './LLMService';
+import { NotionService } from './NotionService';
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'devnote.sidebar';
@@ -14,6 +15,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private pendingFormData: { title: string; description?: string } | null = null;
   private currentNote: StructuredNote | null = null;
   private generateAbortController: AbortController | null = null;
+  private syncAbortController: AbortController | null = null;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -59,6 +61,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           case 'clickDiscard':
             await this.handleClickDiscard();
             break;
+          case 'clickSaveNote':
+            await this.handleClickSaveNote();
+            break;
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -70,6 +75,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       if (this.generateAbortController) {
         this.generateAbortController.abort();
         this.generateAbortController = null;
+      }
+      if (this.syncAbortController) {
+        this.syncAbortController.abort();
+        // If a draft is in flight, save it before clearing
+        if (this.currentNote && this.pendingFormData) {
+          void this.saveCurrentAsDraft('Sync interrupted. Please retry.');
+        }
+        this.syncAbortController = null;
       }
       this.currentNote = null;
       this.pendingFormData = null;
@@ -273,14 +286,146 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private async handleClickRetry(kind: 'generate' | 'sync'): Promise<void> {
     if (kind === 'generate' && this.pendingFormData) {
       await this.handleSubmitForm(this.pendingFormData.title, this.pendingFormData.description);
+    } else if (kind === 'sync') {
+      await this.handleClickSaveNote();
     }
-    // 'sync' retry handled in Task 8
   }
 
   private async handleClickDiscard(): Promise<void> {
     this.currentNote = null;
     this.pendingFormData = null;
     await this.refreshIdleState();
+  }
+
+  private async handleClickSaveNote(): Promise<void> {
+    if (!this.currentNote || !this.pendingFormData) {
+      this.postMessage({
+        type: 'setState',
+        state: 'sync-error',
+        data: { message: 'No note in memory to sync. Please regenerate.' },
+      });
+      return;
+    }
+
+    const notionToken = await this.configService.getNotionToken();
+    if (!notionToken) {
+      this.postMessage({ type: 'setState', state: 'setup' });
+      return;
+    }
+
+    const databaseId = this.configService.getNotionDatabaseId();
+    if (!databaseId) {
+      this.postMessage({ type: 'setState', state: 'setup' });
+      return;
+    }
+
+    const apiKey = await this.configService.getGeminiApiKey();
+    if (!apiKey) {
+      this.postMessage({ type: 'setState', state: 'setup' });
+      return;
+    }
+
+    this.postMessage({ type: 'setState', state: 'syncing' });
+    this.postMessage({ type: 'setLoadingText', text: 'Preparing note...' });
+    this.syncAbortController = new AbortController();
+
+    try {
+      const llmService = new GeminiLLMService(apiKey);
+
+      // Step 1: Structure for Notion
+      const noteContent = this.serializeNoteToMarkdown(this.currentNote);
+      const structuredContent = await llmService.structureForNotion(noteContent);
+      if (this.syncAbortController?.signal.aborted) return;
+
+      // Step 2: Check for duplicate
+      this.postMessage({ type: 'setLoadingText', text: 'Checking Notion...' });
+      const notionService = new NotionService(notionToken, databaseId);
+      const existingPageId = await notionService.findPageByTitle(this.pendingFormData.title);
+      if (this.syncAbortController?.signal.aborted) return;
+
+      if (existingPageId !== null) {
+        // Duplicate — Task 9 will handle this
+        this.postMessage({
+          type: 'setState',
+          state: 'duplicate',
+          data: { title: this.pendingFormData.title },
+        });
+        return;
+      }
+
+      // Step 3: Push new page
+      this.postMessage({ type: 'setLoadingText', text: 'Syncing to Notion...' });
+      await notionService.push(this.pendingFormData.title, structuredContent);
+      if (this.syncAbortController?.signal.aborted) return;
+
+      // Success
+      await this.draftStore.clear();
+      this.postMessage({
+        type: 'setState',
+        state: 'success',
+        data: { message: 'You got it! Note synced to Notion.' },
+      });
+
+      // Auto-transition to idle after 3 seconds
+      setTimeout(() => {
+        this.currentNote = null;
+        this.pendingFormData = null;
+        void this.refreshIdleState();
+      }, 3000);
+    } catch (err) {
+      if (this.syncAbortController?.signal.aborted) return;
+      await this.saveCurrentAsDraft('Couldn\'t sync to Notion. Please try again.');
+      this.postMessage({
+        type: 'setState',
+        state: 'sync-error',
+        data: { message: 'Couldn\'t sync to Notion. Please try again.' },
+      });
+    }
+  }
+
+  private async saveCurrentAsDraft(errorMessage: string): Promise<void> {
+    if (!this.currentNote || !this.pendingFormData) return;
+
+    const workspacePath = this.getWorkspacePath();
+    let branchName = '—';
+    if (workspacePath) {
+      try {
+        const gitService = new GitService(workspacePath);
+        branchName = await gitService.getCurrentBranch();
+      } catch {
+        // ignore
+      }
+    }
+
+    await this.draftStore.save({
+      title: this.pendingFormData.title,
+      description: this.pendingFormData.description,
+      generatedNote: this.currentNote,
+      lastError: errorMessage,
+      createdAt: Date.now(),
+      branchName,
+    });
+  }
+
+  private serializeNoteToMarkdown(note: StructuredNote): string {
+    return [
+      `# ${note.title}`,
+      ``,
+      `## Summary`,
+      note.summary,
+      ``,
+      `## What Changed`,
+      ...note.whatChanged.map((c) => `- ${c}`),
+      ``,
+      `## Why`,
+      note.why,
+      ``,
+      `## Key Decisions`,
+      note.keyDecisions,
+      ``,
+      `## Files Affected`,
+      ...note.filesAffected.map((f) => `- ${f}`),
+    ].join('\n');
   }
 
   private postMessage(msg: any): void {
