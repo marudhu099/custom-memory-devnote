@@ -30,9 +30,19 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this.getHtml(webviewView.webview);
 
-    webviewView.webview.onDidReceiveMessage((msg) => {
-      if (msg.type === 'ready') {
-        this.handleReady();
+    webviewView.webview.onDidReceiveMessage(async (msg) => {
+      try {
+        switch (msg.type) {
+          case 'ready':
+            await this.handleReady();
+            break;
+          case 'saveSetup':
+            await this.handleSaveSetup(msg.geminiKey, msg.notionToken, msg.notionDbId);
+            break;
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`DevNote: ${message}`);
       }
     });
   }
@@ -53,6 +63,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     } else {
       this.postMessage({ type: 'setState', state: 'idle' });
     }
+  }
+
+  private async handleSaveSetup(geminiKey: string, notionToken: string, notionDbId: string): Promise<void> {
+    await this.configService.setGeminiApiKey(geminiKey);
+    await this.configService.setNotionToken(notionToken);
+
+    const config = vscode.workspace.getConfiguration('devnote');
+    await config.update('notionDatabaseId', notionDbId, vscode.ConfigurationTarget.Global);
+
+    this.postMessage({ type: 'setState', state: 'idle' });
   }
 
   private postMessage(msg: any): void {
