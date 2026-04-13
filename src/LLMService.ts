@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const MODEL_FALLBACK_CHAIN = ['gemini-2.5-flash', 'gemini-2.0-flash'];
-const RETRIABLE_ERROR_PATTERN = /503|overloaded|high demand|unavailable/i;
+const MODEL_FALLBACK_CHAIN = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const RETRIABLE_ERROR_PATTERN = /503|429|overloaded|high demand|unavailable|quota|rate limit|too many requests/i;
 
 export interface NotePayload {
   branchDiff: string;
@@ -54,6 +54,11 @@ export class GeminiLLMService implements LLMService {
     }
 
     const errMsg = lastError instanceof Error ? lastError.message : String(lastError);
+    if (/429|quota|rate limit|too many requests/i.test(errMsg)) {
+      throw new Error(
+        'Gemini free tier quota exceeded. Wait a minute and retry, or upgrade your API key billing.'
+      );
+    }
     if (RETRIABLE_ERROR_PATTERN.test(errMsg)) {
       throw new Error('Gemini is temporarily overloaded. Please try again in a minute.');
     }

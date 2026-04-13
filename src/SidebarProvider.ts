@@ -399,33 +399,21 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const apiKey = await this.configService.getGeminiApiKey();
-    if (!apiKey) {
-      this.postMessage({ type: 'setState', state: 'setup' });
-      return;
-    }
-
     this.postMessage({ type: 'setState', state: 'syncing' });
-    this.postMessage({ type: 'setLoadingText', text: 'Preparing note...' });
+    this.postMessage({ type: 'setLoadingText', text: 'Checking Notion...' });
     this.syncAbortController = new AbortController();
 
     try {
-      const llmService = new GeminiLLMService(apiKey);
+      // Build the Notion content locally from the structured note — no extra LLM call needed.
+      const structuredContent = this.serializeNoteToMarkdown(this.currentNote);
 
-      // Step 1: Structure for Notion
-      const noteContent = this.serializeNoteToMarkdown(this.currentNote);
-      const structuredContent = await llmService.structureForNotion(noteContent);
-      if (this.syncAbortController?.signal.aborted) return;
-
-      // Step 2: Check for duplicate
-      this.postMessage({ type: 'setLoadingText', text: 'Checking Notion...' });
+      // Step 1: Check for duplicate
       const notionService = new NotionService(notionToken, databaseId);
       const existingPageId = await notionService.findPageByTitle(this.pendingFormData.title);
       if (this.syncAbortController?.signal.aborted) return;
 
       if (existingPageId !== null) {
         this.currentDuplicatePageId = existingPageId;
-        // Cache the structured content for use by the choice handler
         this.cachedStructuredContent = structuredContent;
         this.postMessage({
           type: 'setState',
@@ -435,7 +423,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      // Step 3: Push new page
+      // Step 2: Push new page
       this.postMessage({ type: 'setLoadingText', text: 'Syncing to Notion...' });
       await notionService.push(this.pendingFormData.title, structuredContent);
       if (this.syncAbortController?.signal.aborted) return;
