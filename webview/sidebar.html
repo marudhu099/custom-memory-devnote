@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https:; script-src 'nonce-{{NONCE}}'; style-src vscode-resource: 'unsafe-inline'; font-src vscode-resource:;">
+  <link rel="stylesheet" href="{{CSS_URI}}">
+  <title>DevNote</title>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <span class="brand-icon">🧠</span>
+      <span class="brand-name">DevNote</span>
+    </div>
+    <button class="gear-button" id="gear-button" title="Settings" aria-label="Settings">⚙️</button>
+  </div>
+
+  <main class="content">
+    <!-- State 1: Setup -->
+    <section class="state" data-state="setup" hidden>
+      <h2>Setup DevNote before using:</h2>
+
+      <label for="gemini-key">Gemini API Key</label>
+      <input type="password" id="gemini-key" placeholder="Paste your Gemini API key" />
+      <a class="helper-link" href="https://aistudio.google.com/apikey" target="_blank">Get your free key →</a>
+
+      <label for="notion-token">Notion Integration Token</label>
+      <input type="password" id="notion-token" placeholder="Paste your Notion token" />
+      <a class="helper-link" href="https://www.notion.so/my-integrations" target="_blank">How to create one →</a>
+
+      <label for="notion-db">Notion Database ID</label>
+      <input type="text" id="notion-db" placeholder="32-character database ID" />
+      <a class="helper-link" href="https://developers.notion.com/docs/working-with-databases#adding-pages-to-a-database" target="_blank">How to find it →</a>
+
+      <p class="error-message" id="setup-error" hidden></p>
+
+      <button class="primary-button" id="save-setup">Save</button>
+    </section>
+
+    <!-- State 11: Draft Recovery Banner (above all other states) -->
+    <section class="draft-banner" id="draft-banner" hidden>
+      <div class="warning-icon">⚠️</div>
+      <div class="draft-content">
+        <p class="draft-title">Unsynced draft from <span id="draft-time"></span></p>
+        <p class="draft-note-title">Title: <span id="draft-note-title"></span></p>
+        <p class="draft-error">Last error: <span id="draft-error"></span></p>
+        <div class="draft-actions">
+          <button class="primary-button small" id="draft-retry">🔁 Retry Sync</button>
+          <button class="secondary-button small" id="draft-discard">🗑 Discard</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- State 2: Idle -->
+    <section class="state" data-state="idle" hidden>
+      <p class="branch-indicator">📍 <span id="branch-name">—</span></p>
+      <button class="primary-button" id="generate-button">Generate Doc</button>
+      <p class="disabled-reason" id="disabled-reason" hidden></p>
+    </section>
+
+    <!-- State 3: Form -->
+    <section class="state" data-state="form" hidden>
+      <p class="branch-indicator">📍 <span id="form-branch-name">—</span></p>
+
+      <label for="form-title">Title (required)</label>
+      <input type="text" id="form-title" placeholder="What did you work on?" />
+
+      <label for="form-description">Description (optional)</label>
+      <textarea id="form-description" rows="3" placeholder="Context, decisions, things to remember..."></textarea>
+
+      <div class="row">
+        <button class="secondary-button" id="form-back">← Back</button>
+        <button class="primary-button" id="form-submit" disabled>Generate</button>
+      </div>
+    </section>
+
+    <!-- State 4: Generating -->
+    <section class="state" data-state="generating" hidden>
+      <div class="loader-container">
+        <div class="brand-loader"></div>
+        <p class="loader-text" id="generating-text">Generating note with Gemini...</p>
+      </div>
+    </section>
+
+    <!-- State 5: Preview -->
+    <section class="state" data-state="preview" hidden>
+      <button class="back-link" id="preview-back">← Back</button>
+
+      <h3 class="preview-title" id="preview-title">—</h3>
+      <hr />
+
+      <h4>Summary</h4>
+      <p id="preview-summary">—</p>
+
+      <h4>What Changed</h4>
+      <ul id="preview-what-changed"></ul>
+
+      <h4>Why</h4>
+      <p id="preview-why">—</p>
+
+      <h4>Key Decisions</h4>
+      <p id="preview-key-decisions">—</p>
+
+      <h4>Files Affected</h4>
+      <ul id="preview-files-affected"></ul>
+
+      <div class="row">
+        <button class="primary-button" id="preview-save">Save Note</button>
+        <button class="secondary-button" id="preview-discard">Discard</button>
+      </div>
+    </section>
+
+    <!-- State 6: Generation Error -->
+    <section class="state" data-state="generate-error" hidden>
+      <p class="branch-indicator">📍 <span id="gen-error-branch-name">—</span></p>
+      <button class="primary-button" id="gen-error-generate">Generate Doc</button>
+      <p class="error-message">❌ <span id="gen-error-message">Couldn't generate note. Please try again.</span></p>
+      <button class="primary-button retry-button" id="gen-error-retry">🔁 Retry</button>
+    </section>
+
+    <!-- State 7: Syncing -->
+    <section class="state" data-state="syncing" hidden>
+      <div class="loader-container">
+        <div class="brand-loader"></div>
+        <p class="loader-text" id="syncing-text">Preparing note...</p>
+      </div>
+    </section>
+
+    <!-- State 8: Duplicate Detected -->
+    <section class="state" data-state="duplicate" hidden>
+      <div class="warning-icon">⚠️</div>
+      <p>A note titled "<span id="duplicate-title">—</span>" already exists in your Notion database.</p>
+      <p>What do you want to do?</p>
+
+      <button class="choice-button" id="dup-append">
+        <strong>➕ Append</strong>
+        <span class="choice-detail">Add new content below the existing page</span>
+      </button>
+
+      <button class="choice-button" id="dup-replace">
+        <strong>🔄 Replace</strong>
+        <span class="choice-detail">Delete old content, use new content (same page URL preserved)</span>
+      </button>
+
+      <button class="choice-button" id="dup-cancel">
+        <strong>✕ Cancel</strong>
+        <span class="choice-detail">Keep the draft and decide later</span>
+      </button>
+    </section>
+
+    <!-- State 9: Sync Success -->
+    <section class="state" data-state="success" hidden>
+      <p class="success-message">✅ <span id="success-text">You got it! Note synced to Notion.</span></p>
+    </section>
+
+    <!-- State 10: Sync Error -->
+    <section class="state" data-state="sync-error" hidden>
+      <p class="branch-indicator">📍 <span id="sync-error-branch-name">—</span></p>
+      <button class="primary-button" id="sync-error-generate">Generate Doc</button>
+      <p class="error-message">❌ <span id="sync-error-message">Couldn't sync to Notion. Please try again.</span></p>
+      <button class="primary-button retry-button" id="sync-error-retry">🔁 Retry</button>
+    </section>
+  </main>
+
+  <script nonce="{{NONCE}}" src="{{JS_URI}}"></script>
+</body>
+</html>
