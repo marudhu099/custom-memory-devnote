@@ -5,6 +5,36 @@ All notable changes to DevNote will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-04-12
+
+### Added
+
+- Persistent sidebar panel — DevNote now lives in the activity bar with a brain icon
+- First-time setup wizard inside the sidebar — no more separate command palette flow
+- Real-time progress indicators for generation and Notion sync (stepped loader)
+- Draft recovery — unsynced notes persist across VS Code restarts and show as a banner
+- Inline duplicate handling (Append / Replace / Cancel) directly in the sidebar
+- Back navigation in the form/preview flow that preserves user input
+- Gear icon for accessing settings any time after initial setup
+
+### Changed
+
+- All user interaction now happens in the sidebar instead of via input boxes and webview tabs
+- `Ctrl+Alt+D` now opens the sidebar and auto-triggers note generation
+
+### Removed
+
+- `Ctrl+Alt+M` keybinding (sync is automatic on Save Note)
+- `DevNote: Sync to Notion` command (replaced by sidebar Save Note button)
+- `DevNote: Set Gemini API Key` command (replaced by sidebar settings)
+- `DevNote: Set Notion Token` command (replaced by sidebar settings)
+- Local `custom_memory_note.md` safety file (drafts now persist in extension state)
+- Separate webview preview tab (preview is in the sidebar)
+
+### Migration
+
+- Existing users with a leftover `custom_memory_note.md` from v0.1.x will see it auto-converted to a draft on first sidebar open
+
 ## [0.1.1] — 2026-04-12
 
 ### Added
