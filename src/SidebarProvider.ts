@@ -334,10 +334,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       if (this.generateAbortController?.signal.aborted) {
         return;
       }
+      const detail = err instanceof Error ? err.message : String(err);
       this.postMessage({
         type: 'setState',
         state: 'generate-error',
-        data: { message: 'Couldn\'t generate note. Please try again.' },
+        data: { message: `Couldn't generate note: ${detail}` },
       });
     }
   }
@@ -455,11 +456,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       }, 3000);
     } catch (err) {
       if (this.syncAbortController?.signal.aborted) return;
-      await this.saveCurrentAsDraft('Couldn\'t sync to Notion. Please try again.');
+      const detail = err instanceof Error ? err.message : String(err);
+      const friendly = `Couldn't sync to Notion: ${detail}`;
+      await this.saveCurrentAsDraft(friendly);
       this.postMessage({
         type: 'setState',
         state: 'sync-error',
-        data: { message: 'Couldn\'t sync to Notion. Please try again.' },
+        data: { message: friendly },
       });
     }
   }
@@ -569,9 +572,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         void this.refreshIdleState();
       }, 3000);
     } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
       const friendlyMessage = choice === 'append'
-        ? 'Couldn\'t add to existing Notion page. Please try again.'
-        : 'Couldn\'t replace Notion page content. Please try again.';
+        ? `Couldn't add to existing Notion page: ${detail}`
+        : `Couldn't replace Notion page content: ${detail}`;
       await this.saveCurrentAsDraft(friendlyMessage);
       this.postMessage({
         type: 'setState',
