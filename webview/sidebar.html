@@ -34,7 +34,7 @@
       <p class="error-message" id="setup-error" hidden></p>
 
       <div class="row">
-        <button class="secondary-button" id="setup-back">← Back</button>
+        <button class="secondary-button" id="setup-back">Back</button>
         <button class="primary-button" id="save-setup">Save</button>
       </div>
     </section>
@@ -55,14 +55,14 @@
 
     <!-- State 2: Idle -->
     <section class="state" data-state="idle" hidden>
-      <p class="branch-indicator">📍 <span id="branch-name">—</span></p>
+      <p class="branch-indicator">Current branch: <span id="branch-name">—</span></p>
       <button class="primary-button" id="generate-button">Generate Doc</button>
       <p class="disabled-reason" id="disabled-reason" hidden></p>
     </section>
 
     <!-- State 3: Form -->
     <section class="state" data-state="form" hidden>
-      <p class="branch-indicator">📍 <span id="form-branch-name">—</span></p>
+      <p class="branch-indicator">Current branch: <span id="form-branch-name">—</span></p>
 
       <label for="form-title">Title (required)</label>
       <input type="text" id="form-title" placeholder="What did you work on?" />
@@ -71,7 +71,7 @@
       <textarea id="form-description" rows="3" placeholder="Context, decisions, things to remember..."></textarea>
 
       <div class="row">
-        <button class="secondary-button" id="form-back">← Back</button>
+        <button class="secondary-button" id="form-back">Back</button>
         <button class="primary-button" id="form-submit" disabled>Generate</button>
       </div>
     </section>
@@ -86,7 +86,7 @@
 
     <!-- State 5: Preview -->
     <section class="state" data-state="preview" hidden>
-      <button class="back-link" id="preview-back">← Back</button>
+      <button class="back-link" id="preview-back">Back</button>
 
       <h3 class="preview-title" id="preview-title">—</h3>
       <hr />
@@ -114,7 +114,7 @@
 
     <!-- State 6: Generation Error -->
     <section class="state" data-state="generate-error" hidden>
-      <p class="branch-indicator">📍 <span id="gen-error-branch-name">—</span></p>
+      <p class="branch-indicator">Current branch: <span id="gen-error-branch-name">—</span></p>
       <button class="primary-button" id="gen-error-generate">Generate Doc</button>
       <p class="error-message">❌ <span id="gen-error-message">Couldn't generate note. Please try again.</span></p>
       <button class="primary-button retry-button" id="gen-error-retry">🔁 Retry</button>
@@ -153,12 +153,12 @@
     <!-- State 9: Sync Success -->
     <section class="state" data-state="success" hidden>
       <p class="success-message">✅ <span id="success-text">You got it! Note synced to Notion.</span></p>
-      <button class="primary-button" id="success-back">← Back to Generate Doc</button>
+      <button class="primary-button" id="success-back">Back to Generate Doc</button>
     </section>
 
     <!-- State 10: Sync Error -->
     <section class="state" data-state="sync-error" hidden>
-      <p class="branch-indicator">📍 <span id="sync-error-branch-name">—</span></p>
+      <p class="branch-indicator">Current branch: <span id="sync-error-branch-name">—</span></p>
       <button class="primary-button" id="sync-error-generate">Generate Doc</button>
       <p class="error-message">❌ <span id="sync-error-message">Couldn't sync to Notion. Please try again.</span></p>
       <button class="primary-button retry-button" id="sync-error-retry">🔁 Retry</button>
