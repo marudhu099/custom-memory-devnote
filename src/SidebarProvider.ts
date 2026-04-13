@@ -16,6 +16,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private currentNote: StructuredNote | null = null;
   private generateAbortController: AbortController | null = null;
   private syncAbortController: AbortController | null = null;
+  private currentDuplicatePageId: string | null = null;
+  private cachedStructuredContent: string | null = null;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -63,6 +65,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             break;
           case 'clickSaveNote':
             await this.handleClickSaveNote();
+            break;
+          case 'clickDuplicateChoice':
+            await this.handleDuplicateChoice(msg.choice);
             break;
         }
       } catch (err) {
@@ -344,7 +349,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       if (this.syncAbortController?.signal.aborted) return;
 
       if (existingPageId !== null) {
-        // Duplicate — Task 9 will handle this
+        this.currentDuplicatePageId = existingPageId;
+        // Cache the structured content for use by the choice handler
+        this.cachedStructuredContent = structuredContent;
         this.postMessage({
           type: 'setState',
           state: 'duplicate',
@@ -426,6 +433,78 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       `## Files Affected`,
       ...note.filesAffected.map((f) => `- ${f}`),
     ].join('\n');
+  }
+
+  private async handleDuplicateChoice(choice: 'append' | 'replace' | 'cancel'): Promise<void> {
+    if (!this.currentDuplicatePageId || !this.cachedStructuredContent || !this.pendingFormData) {
+      await this.refreshIdleState();
+      return;
+    }
+
+    if (choice === 'cancel') {
+      await this.saveCurrentAsDraft('Sync cancelled. Use Retry to sync later.');
+      this.postMessage({ type: 'setDraft', draft: this.draftStore.get() });
+      this.currentNote = null;
+      this.pendingFormData = null;
+      this.currentDuplicatePageId = null;
+      this.cachedStructuredContent = null;
+      this.postMessage({
+        type: 'setBranchInfo',
+        branch: '—',
+        canGenerate: false,
+        reason: 'Resolve the unsynced draft above before creating a new note.',
+      });
+      this.postMessage({ type: 'setState', state: 'idle' });
+      return;
+    }
+
+    const notionToken = await this.configService.getNotionToken();
+    const databaseId = this.configService.getNotionDatabaseId();
+    if (!notionToken || !databaseId) {
+      this.postMessage({ type: 'setState', state: 'setup' });
+      return;
+    }
+
+    this.postMessage({ type: 'setState', state: 'syncing' });
+    this.postMessage({ type: 'setLoadingText', text: 'Syncing to Notion...' });
+
+    try {
+      const notionService = new NotionService(notionToken, databaseId);
+      if (choice === 'append') {
+        await notionService.appendBlocksToPage(this.currentDuplicatePageId, this.cachedStructuredContent);
+      } else {
+        await notionService.replacePageBlocks(this.currentDuplicatePageId, this.cachedStructuredContent);
+      }
+
+      await this.draftStore.clear();
+      const successMessage = choice === 'append'
+        ? `Note appended to existing Notion page "${this.pendingFormData.title}".`
+        : `Notion page "${this.pendingFormData.title}" replaced with new content.`;
+
+      this.postMessage({
+        type: 'setState',
+        state: 'success',
+        data: { message: successMessage },
+      });
+
+      setTimeout(() => {
+        this.currentNote = null;
+        this.pendingFormData = null;
+        this.currentDuplicatePageId = null;
+        this.cachedStructuredContent = null;
+        void this.refreshIdleState();
+      }, 3000);
+    } catch (err) {
+      const friendlyMessage = choice === 'append'
+        ? 'Couldn\'t add to existing Notion page. Please try again.'
+        : 'Couldn\'t replace Notion page content. Please try again.';
+      await this.saveCurrentAsDraft(friendlyMessage);
+      this.postMessage({
+        type: 'setState',
+        state: 'sync-error',
+        data: { message: friendlyMessage },
+      });
+    }
   }
 
   private postMessage(msg: any): void {
