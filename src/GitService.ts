@@ -65,6 +65,11 @@ export class GitService {
     return branches.all[0] || 'main';
   }
 
+  async getCurrentBranch(): Promise<string> {
+    const branch = await this.git.revparse(['--abbrev-ref', 'HEAD']);
+    return branch.trim();
+  }
+
   async getBranchDiff(): Promise<BranchDiffResult> {
     const baseBranch = await this.getBaseBranch();
     const branchDiff = await this.git.diff([`${baseBranch}...HEAD`]);
