@@ -109,6 +109,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleReady(): Promise<void> {
+    // One-time migration: convert leftover custom_memory_note.md to a draft
+    await this.migrateLegacyFileIfExists();
+
     // Always refresh draft banner
     const draft = this.draftStore.get();
     this.postMessage({ type: 'setDraft', draft });
@@ -123,7 +126,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
 
     if (this.draftStore.exists()) {
-      // When draft exists, idle state shows but Generate Doc is disabled
       this.postMessage({
         type: 'setBranchInfo',
         branch: '—',
@@ -135,6 +137,58 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
 
     await this.refreshIdleState();
+  }
+
+  private async migrateLegacyFileIfExists(): Promise<void> {
+    const workspacePath = this.getWorkspacePath();
+    if (!workspacePath) return;
+
+    const filePath = path.join(workspacePath, 'custom_memory_note.md');
+    if (!fs.existsSync(filePath)) return;
+
+    // If a draft already exists, do not overwrite it. Just leave the file alone.
+    if (this.draftStore.exists()) return;
+
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+
+      // Parse the legacy format. The legacy format had YAML frontmatter:
+      //   ---
+      //   title: ...
+      //   timestamp: ...
+      //   files: [...]
+      //   ---
+      //   ## Summary
+      //   ...
+      const titleMatch = content.match(/^title:\s*(.+)$/m);
+      const title = titleMatch ? titleMatch[1].trim() : 'Migrated draft';
+
+      // Build a minimal StructuredNote from the file content. We don't have the
+      // original generation data, so we use defaults plus the file content as the summary.
+      const draftNote = {
+        title,
+        summary: 'Migrated from a previous DevNote local file.',
+        whatChanged: ['Original content preserved below'],
+        why: 'Recovered from custom_memory_note.md',
+        filesAffected: [],
+        keyDecisions: content,
+        timestamp: new Date().toISOString(),
+      };
+
+      await this.draftStore.save({
+        title,
+        description: undefined,
+        generatedNote: draftNote,
+        lastError: 'Migrated from legacy custom_memory_note.md — please retry sync.',
+        createdAt: Date.now(),
+        branchName: '—',
+      });
+
+      // Remove the legacy file
+      fs.unlinkSync(filePath);
+    } catch {
+      // Migration is best-effort. If parsing fails, leave the file alone.
+    }
   }
 
   private async handleSaveSetup(geminiKey: string, notionToken: string, notionDbId: string): Promise<void> {
