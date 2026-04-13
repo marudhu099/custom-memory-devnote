@@ -5,12 +5,15 @@ import * as fs from 'fs';
 import { ConfigService } from './ConfigService';
 import { DraftStore } from './DraftStore';
 import { GitService } from './GitService';
+import { GeminiLLMService, NotePayload, StructuredNote } from './LLMService';
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'devnote.sidebar';
 
   private view?: vscode.WebviewView;
   private pendingFormData: { title: string; description?: string } | null = null;
+  private currentNote: StructuredNote | null = null;
+  private generateAbortController: AbortController | null = null;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -50,11 +53,26 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           case 'clickBack':
             await this.handleClickBack(msg.from);
             break;
+          case 'clickRetry':
+            await this.handleClickRetry(msg.kind);
+            break;
+          case 'clickDiscard':
+            await this.handleClickDiscard();
+            break;
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`DevNote: ${message}`);
       }
+    });
+
+    webviewView.onDidDispose(() => {
+      if (this.generateAbortController) {
+        this.generateAbortController.abort();
+        this.generateAbortController = null;
+      }
+      this.currentNote = null;
+      this.pendingFormData = null;
     });
   }
 
@@ -160,10 +178,79 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   private async handleSubmitForm(title: string, description?: string): Promise<void> {
     this.pendingFormData = { title, description };
-    // Generation flow — implemented in Task 7
-    // For now, just go back to idle (placeholder)
+
+    const workspacePath = this.getWorkspacePath();
+    if (!workspacePath) {
+      this.postMessage({ type: 'setState', state: 'generate-error', data: { message: 'Not a git repository.' } });
+      return;
+    }
+
+    const apiKey = await this.configService.getGeminiApiKey();
+    if (!apiKey) {
+      this.postMessage({ type: 'setState', state: 'setup' });
+      return;
+    }
+
     this.postMessage({ type: 'setState', state: 'generating' });
     this.postMessage({ type: 'setLoadingText', text: 'Generating note with Gemini...' });
+
+    this.generateAbortController = new AbortController();
+
+    try {
+      const gitService = new GitService(workspacePath);
+      const onBase = await gitService.isOnBaseBranch();
+
+      let payload: NotePayload;
+      if (onBase) {
+        const uncommitted = await gitService.getUncommittedDiff();
+        payload = {
+          branchDiff: '',
+          filesChanged: uncommitted.filesChanged,
+          commitCount: 0,
+          title,
+          uncommittedStaged: uncommitted.staged,
+          uncommittedUnstaged: uncommitted.unstaged,
+          userNotes: description,
+        };
+      } else {
+        const branchDiff = await gitService.getBranchDiff();
+        payload = {
+          branchDiff: branchDiff.branchDiff,
+          filesChanged: branchDiff.filesChanged,
+          commitCount: branchDiff.commitCount,
+          title,
+          userNotes: description,
+        };
+
+        const uncommitted = await gitService.getUncommittedDiff();
+        if (uncommitted.staged || uncommitted.unstaged) {
+          payload.uncommittedStaged = uncommitted.staged;
+          payload.uncommittedUnstaged = uncommitted.unstaged;
+          const allFiles = new Set([...payload.filesChanged, ...uncommitted.filesChanged]);
+          payload.filesChanged = [...allFiles];
+        }
+      }
+
+      const llmService = new GeminiLLMService(apiKey);
+      const note = await llmService.generateNote(payload);
+
+      // Check if cancelled while we were waiting
+      if (this.generateAbortController?.signal.aborted) {
+        return;
+      }
+
+      this.currentNote = note;
+      this.postMessage({ type: 'setState', state: 'preview', data: { note } });
+    } catch (err) {
+      if (this.generateAbortController?.signal.aborted) {
+        return;
+      }
+      this.postMessage({
+        type: 'setState',
+        state: 'generate-error',
+        data: { message: 'Couldn\'t generate note. Please try again.' },
+      });
+    }
   }
 
   private async handleClickBack(from: string): Promise<void> {
@@ -181,6 +268,19 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         });
       }
     }
+  }
+
+  private async handleClickRetry(kind: 'generate' | 'sync'): Promise<void> {
+    if (kind === 'generate' && this.pendingFormData) {
+      await this.handleSubmitForm(this.pendingFormData.title, this.pendingFormData.description);
+    }
+    // 'sync' retry handled in Task 8
+  }
+
+  private async handleClickDiscard(): Promise<void> {
+    this.currentNote = null;
+    this.pendingFormData = null;
+    await this.refreshIdleState();
   }
 
   private postMessage(msg: any): void {
