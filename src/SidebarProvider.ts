@@ -103,9 +103,17 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  // External trigger from Ctrl+Alt+D shortcut — to be implemented in Task 13
   async triggerGenerate(): Promise<void> {
-    // Implementation comes in Task 13
+    // If the view isn't visible yet, the resolveWebviewView will run handleReady.
+    // We just need to make sure idle state shows and then click generate.
+    if (!this.view) {
+      // View is not yet open. The webview will request 'ready' on its own.
+      // We can't do much here until the user actually opens it.
+      return;
+    }
+    // Force the idle/form transition
+    await this.refreshIdleState();
+    await this.handleClickGenerate();
   }
 
   private async handleReady(): Promise<void> {

@@ -2,7 +2,7 @@
   "name": "devnote",
   "displayName": "DevNote",
   "description": "AI-generated dev notes from git diffs. Save locally, sync to Notion, never lose context again.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "marudhu099",
   "author": "Marudhupandiyan",
   "license": "MIT",
@@ -58,29 +58,12 @@
       {
         "command": "devnote.create",
         "title": "DevNote: Create Dev Note"
-      },
-      {
-        "command": "devnote.sync",
-        "title": "DevNote: Sync to Notion"
-      },
-      {
-        "command": "devnote.setGeminiKey",
-        "title": "DevNote: Set Gemini API Key"
-      },
-      {
-        "command": "devnote.setNotionToken",
-        "title": "DevNote: Set Notion Token"
       }
     ],
     "keybindings": [
       {
         "command": "devnote.create",
         "key": "ctrl+alt+d",
-        "when": "editorTextFocus"
-      },
-      {
-        "command": "devnote.sync",
-        "key": "ctrl+alt+m",
         "when": "editorTextFocus"
       }
     ],
