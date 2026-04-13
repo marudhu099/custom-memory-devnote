@@ -75,6 +75,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           case 'clickDiscardDraft':
             await this.handleDiscardDraft();
             break;
+          case 'openSettings':
+            await this.handleOpenSettings();
+            break;
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -541,6 +544,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.currentDuplicatePageId = null;
     this.cachedStructuredContent = null;
     await this.refreshIdleState();
+  }
+
+  private async handleOpenSettings(): Promise<void> {
+    const geminiKey = await this.configService.getGeminiApiKey();
+    const notionToken = await this.configService.getNotionToken();
+    const notionDbId = this.configService.getNotionDatabaseId();
+
+    this.postMessage({
+      type: 'prefillSetup',
+      geminiKey: geminiKey ?? '',
+      notionToken: notionToken ?? '',
+      notionDbId: notionDbId ?? '',
+    });
+    this.postMessage({ type: 'setState', state: 'setup' });
   }
 
   private postMessage(msg: any): void {
