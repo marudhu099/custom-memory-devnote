@@ -106,6 +106,10 @@
     vscode.postMessage({ type: 'saveSetup', geminiKey, notionToken, notionDbId });
   });
 
+  document.getElementById('setup-back').addEventListener('click', () => {
+    vscode.postMessage({ type: 'clickBack', from: 'setup' });
+  });
+
   // Idle state listeners
   document.getElementById('generate-button').addEventListener('click', () => {
     vscode.postMessage({ type: 'clickGenerate' });

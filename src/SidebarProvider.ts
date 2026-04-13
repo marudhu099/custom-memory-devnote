@@ -356,6 +356,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           description: this.pendingFormData.description,
         });
       }
+    } else if (from === 'setup') {
+      // Setup → wherever handleReady decides (idle if configured, stays in setup otherwise).
+      await this.handleReady();
     }
   }
 

@@ -40,7 +40,7 @@
         {
           "id": "devnote-sidebar",
           "title": "DevNote",
-          "icon": "asset/icon.png"
+          "icon": "asset/sidebar-icon.svg"
         }
       ]
     },
@@ -50,7 +50,7 @@
           "type": "webview",
           "id": "devnote.sidebar",
           "name": "DevNote",
-          "icon": "asset/icon.png"
+          "icon": "asset/sidebar-icon.svg"
         }
       ]
     },
