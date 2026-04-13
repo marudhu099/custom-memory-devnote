@@ -69,6 +69,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           case 'clickDuplicateChoice':
             await this.handleDuplicateChoice(msg.choice);
             break;
+          case 'clickRetryDraft':
+            await this.handleRetryDraft();
+            break;
+          case 'clickDiscardDraft':
+            await this.handleDiscardDraft();
+            break;
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -505,6 +511,36 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         data: { message: friendlyMessage },
       });
     }
+  }
+
+  private async handleRetryDraft(): Promise<void> {
+    const draft = this.draftStore.get();
+    if (!draft) {
+      await this.refreshIdleState();
+      return;
+    }
+
+    // Restore in-memory state from the draft
+    this.currentNote = draft.generatedNote;
+    this.pendingFormData = { title: draft.title, description: draft.description };
+
+    // Use the cached structured content if available, otherwise re-generate it via LLM
+    if (draft.structuredContent) {
+      this.cachedStructuredContent = draft.structuredContent;
+    }
+
+    // Re-run the sync flow
+    await this.handleClickSaveNote();
+  }
+
+  private async handleDiscardDraft(): Promise<void> {
+    await this.draftStore.clear();
+    this.postMessage({ type: 'setDraft', draft: null });
+    this.currentNote = null;
+    this.pendingFormData = null;
+    this.currentDuplicatePageId = null;
+    this.cachedStructuredContent = null;
+    await this.refreshIdleState();
   }
 
   private postMessage(msg: any): void {
