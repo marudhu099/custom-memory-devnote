@@ -653,6 +653,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         branchName = await this.tryGetBranchName(new GitService(workspacePath));
       }
       await this.memoryStore.saveNote(this.currentNote, {
+        title: this.pendingFormData?.title ?? this.currentNote.title,
         branchName,
         notionPageId,
         notionPageUrl,

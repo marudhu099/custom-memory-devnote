@@ -26,6 +26,7 @@ export interface FullNote {
 }
 
 export interface NoteMetadata {
+  title: string;
   branchName: string;
   notionPageId: string;
   notionPageUrl: string;
@@ -156,7 +157,7 @@ export class MemoryStore {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
-        note.title,
+        meta.title,
         meta.branchName,
         contentJson,
         contentMarkdown,
