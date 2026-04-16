@@ -7,7 +7,7 @@ export class NotionService {
     this.databaseId = databaseId;
   }
 
-  async push(title: string, content: string): Promise<void> {
+  async push(title: string, content: string): Promise<{ pageId: string; pageUrl: string }> {
     const body = {
       parent: { database_id: this.databaseId },
       properties: {
@@ -32,6 +32,9 @@ export class NotionService {
       const error = await response.text();
       throw new Error(`Notion API error (${response.status}): ${error}`);
     }
+
+    const data = (await response.json()) as { id: string; url: string };
+    return { pageId: data.id, pageUrl: data.url };
   }
 
   async findPageByTitle(title: string): Promise<string | null> {

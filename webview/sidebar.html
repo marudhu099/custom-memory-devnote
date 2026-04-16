@@ -37,6 +37,28 @@
         <button class="secondary-button" id="setup-back">Back</button>
         <button class="primary-button" id="save-setup">Save</button>
       </div>
+
+      <div class="clear-memory-section" id="clear-memory-section" hidden>
+        <hr />
+        <button class="danger-button full-width" id="clear-memory-button">Clear all memory</button>
+      </div>
+
+      <!-- Clear memory confirmation popup -->
+      <div class="popup-overlay" id="clear-memory-popup" hidden>
+        <div class="popup">
+          <div class="popup-icon">⚠️</div>
+          <h3 class="popup-title">Clear all memory?</h3>
+          <p class="popup-body">This will permanently delete all notes DevNote has stored locally. Your Notion pages will NOT be touched.</p>
+          <label class="popup-checkbox-label">
+            <input type="checkbox" id="clear-export-checkbox" />
+            Save a backup JSON file first
+          </label>
+          <div class="popup-actions">
+            <button class="secondary-button" id="clear-cancel">Cancel</button>
+            <button class="danger-button" id="clear-confirm">Clear all</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- State 11: Draft Recovery Banner (above all other states) -->
@@ -58,6 +80,17 @@
       <p class="branch-indicator">Current branch: <span id="branch-name">—</span></p>
       <button class="primary-button" id="generate-button">Generate Doc</button>
       <p class="disabled-reason" id="disabled-reason" hidden></p>
+
+      <div class="recent-notes-section">
+        <div class="recent-notes-header">Recent Notes</div>
+        <div id="recent-notes-list"></div>
+        <p class="recent-notes-empty" id="recent-notes-empty">
+          Your notes will appear here once you generate your first one.
+        </p>
+        <p class="recent-notes-unavailable" id="recent-notes-unavailable" hidden>
+          Memory unavailable — notes will still sync to Notion but won't appear here.
+        </p>
+      </div>
     </section>
 
     <!-- State 3: Form -->
@@ -106,7 +139,9 @@
       <h4>Files Affected</h4>
       <ul id="preview-files-affected"></ul>
 
-      <div class="row">
+      <a class="notion-button" id="preview-notion-link" href="#" target="_blank" hidden>Open in Notion</a>
+
+      <div class="row" id="preview-new-actions">
         <button class="primary-button" id="preview-save">Save Note</button>
         <button class="secondary-button" id="preview-discard">Discard</button>
       </div>

@@ -6,6 +6,7 @@ import { ConfigService } from './ConfigService';
 import { DraftStore } from './DraftStore';
 import { GitService } from './GitService';
 import { GeminiLLMService, NotePayload, StructuredNote } from './LLMService';
+import { MemoryStore } from './MemoryStore';
 import { NotionService } from './NotionService';
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
@@ -23,7 +24,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     private readonly extensionUri: vscode.Uri,
     private readonly context: vscode.ExtensionContext,
     private readonly configService: ConfigService,
-    private readonly draftStore: DraftStore
+    private readonly draftStore: DraftStore,
+    private readonly memoryStore: MemoryStore
   ) {}
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -77,6 +79,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             break;
           case 'openSettings':
             await this.handleOpenSettings();
+            break;
+          case 'clickRecentNote':
+            await this.handleClickRecentNote(msg.id);
+            break;
+          case 'clickClearMemory':
+            await this.handleClearMemory(msg.exportFirst);
             break;
         }
       } catch (err) {
@@ -218,6 +226,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     if (!workspacePath) {
       this.postMessage({ type: 'setBranchInfo', branch: '—', canGenerate: false, reason: 'Not a git repository.' });
       this.postMessage({ type: 'setState', state: 'idle' });
+      await this.sendRecentNotes();
       return;
     }
 
@@ -233,15 +242,27 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         const branchName = await this.tryGetBranchName(gitService);
         this.postMessage({ type: 'setBranchInfo', branch: branchName, canGenerate: false, reason: friendly });
         this.postMessage({ type: 'setState', state: 'idle' });
+        await this.sendRecentNotes();
         return;
       }
 
       const branchName = await this.tryGetBranchName(gitService);
       this.postMessage({ type: 'setBranchInfo', branch: branchName, canGenerate: true });
       this.postMessage({ type: 'setState', state: 'idle' });
+      await this.sendRecentNotes();
     } catch (err) {
       this.postMessage({ type: 'setBranchInfo', branch: '—', canGenerate: false, reason: 'Not a git repository.' });
       this.postMessage({ type: 'setState', state: 'idle' });
+      await this.sendRecentNotes();
+    }
+  }
+
+  private async sendRecentNotes(): Promise<void> {
+    try {
+      const recentNotes = await this.memoryStore.getRecentNotes();
+      this.postMessage({ type: 'setRecentNotes', notes: recentNotes });
+    } catch {
+      this.postMessage({ type: 'setRecentNotes', notes: [] });
     }
   }
 
@@ -360,6 +381,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     } else if (from === 'setup') {
       // Setup → wherever handleReady decides (idle if configured, stays in setup otherwise).
       await this.handleReady();
+    } else if (from === 'historical-preview') {
+      // Historical preview → Idle. Clear preview state.
+      this.currentNote = null;
+      await this.refreshIdleState();
     } else if (from === 'success') {
       // Success → Idle. Clear note state and return to a fresh idle screen.
       this.currentNote = null;
@@ -432,11 +457,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
       // Step 2: Push new page
       this.postMessage({ type: 'setLoadingText', text: 'Syncing to Notion...' });
-      await notionService.push(this.pendingFormData.title, structuredContent);
+      const { pageId: notionPageId, pageUrl: notionPageUrl } = await notionService.push(this.pendingFormData.title, structuredContent);
       if (this.syncAbortController?.signal.aborted) return;
 
       // Success — stays on the success state until the user clicks "Back to Generate Doc".
       await this.draftStore.clear();
+
+      // Save to local memory (best-effort — Notion is authoritative)
+      await this.saveNoteToMemory(notionPageId, notionPageUrl);
+
       this.postMessage({
         type: 'setState',
         state: 'success',
@@ -542,6 +571,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       }
 
       await this.draftStore.clear();
+
+      // Save to local memory (best-effort)
+      const notionPageUrl = `https://www.notion.so/${this.currentDuplicatePageId!.replace(/-/g, '')}`;
+      await this.saveNoteToMemory(this.currentDuplicatePageId!, notionPageUrl);
+
       const successMessage = choice === 'append'
         ? `Note appended to existing Notion page "${this.pendingFormData.title}".`
         : `Notion page "${this.pendingFormData.title}" replaced with new content.`;
@@ -608,6 +642,82 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       notionDbId: notionDbId ?? '',
     });
     this.postMessage({ type: 'setState', state: 'setup' });
+  }
+
+  private async saveNoteToMemory(notionPageId: string, notionPageUrl: string): Promise<void> {
+    if (!this.currentNote) return;
+    try {
+      const workspacePath = this.getWorkspacePath();
+      let branchName = '—';
+      if (workspacePath) {
+        branchName = await this.tryGetBranchName(new GitService(workspacePath));
+      }
+      await this.memoryStore.saveNote(this.currentNote, {
+        title: this.pendingFormData?.title ?? this.currentNote.title,
+        branchName,
+        notionPageId,
+        notionPageUrl,
+      });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      vscode.window.showWarningMessage(
+        `Note synced to Notion, but DevNote couldn't save it locally. It won't appear in Recent Notes. (${detail})`
+      );
+    }
+  }
+
+  private async handleClickRecentNote(id: string): Promise<void> {
+    try {
+      const note = await this.memoryStore.getNoteById(id);
+      if (!note) {
+        vscode.window.showWarningMessage('This note is no longer in memory.');
+        await this.refreshIdleState();
+        return;
+      }
+      this.postMessage({
+        type: 'setState',
+        state: 'preview',
+        data: {
+          note: note.content,
+          isHistorical: true,
+          notionPageUrl: note.notionPageUrl,
+        },
+      });
+    } catch {
+      vscode.window.showWarningMessage('Couldn\'t load this note from memory.');
+      await this.refreshIdleState();
+    }
+  }
+
+  private async handleClearMemory(exportFirst: boolean): Promise<void> {
+    try {
+      if (exportFirst) {
+        const json = await this.memoryStore.exportAll();
+        const defaultUri = vscode.Uri.file(
+          `devnote-backup-${new Date().toISOString().slice(0, 10)}.json`
+        );
+        const uri = await vscode.window.showSaveDialog({
+          defaultUri,
+          filters: { 'JSON files': ['json'] },
+        });
+        if (!uri) {
+          // User cancelled the save dialog — abort, nothing deleted
+          return;
+        }
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(json, 'utf-8'));
+      }
+
+      await this.memoryStore.clearAll();
+      vscode.window.showInformationMessage('Memory cleared. Your Notion pages are untouched.');
+      await this.refreshIdleState();
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      if (exportFirst) {
+        vscode.window.showErrorMessage(`Couldn't create backup. Memory was NOT cleared. (${detail})`);
+      } else {
+        vscode.window.showErrorMessage(`Couldn't clear memory. Please try again. (${detail})`);
+      }
+    }
   }
 
   private postMessage(msg: any): void {

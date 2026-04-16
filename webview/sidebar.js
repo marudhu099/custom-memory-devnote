@@ -90,6 +90,79 @@
     return `${Math.floor(seconds / 86400)} days ago`;
   }
 
+  function renderRecentNotes(notes) {
+    const list = document.getElementById('recent-notes-list');
+    const empty = document.getElementById('recent-notes-empty');
+    const unavailable = document.getElementById('recent-notes-unavailable');
+
+    list.innerHTML = '';
+    unavailable.hidden = true;
+
+    if (!notes || notes.length === 0) {
+      empty.hidden = false;
+      hasRecentNotes = false;
+      return;
+    }
+
+    empty.hidden = true;
+    hasRecentNotes = true;
+
+    notes.forEach((note) => {
+      const item = document.createElement('div');
+      item.className = 'recent-note-item';
+      item.dataset.id = note.id;
+
+      const topRow = document.createElement('div');
+      topRow.className = 'recent-note-top';
+
+      const title = document.createElement('span');
+      title.className = 'recent-note-title';
+      title.textContent = note.title;
+
+      const date = document.createElement('span');
+      date.className = 'recent-note-date';
+      date.textContent = formatTime(note.createdAt);
+
+      topRow.appendChild(title);
+      topRow.appendChild(date);
+
+      const branch = document.createElement('div');
+      branch.className = 'recent-note-branch';
+      branch.textContent = note.branchName;
+
+      item.appendChild(topRow);
+      item.appendChild(branch);
+
+      item.addEventListener('click', () => {
+        vscode.postMessage({ type: 'clickRecentNote', id: note.id });
+      });
+
+      list.appendChild(item);
+    });
+  }
+
+  let isHistoricalPreview = false;
+  let hasRecentNotes = false;
+
+  function setPreviewMode(historical, notionPageUrl) {
+    isHistoricalPreview = historical;
+    const newActions = document.getElementById('preview-new-actions');
+    const notionLink = document.getElementById('preview-notion-link');
+
+    if (historical) {
+      newActions.hidden = true;
+      if (notionPageUrl) {
+        notionLink.href = notionPageUrl;
+        notionLink.hidden = false;
+      } else {
+        notionLink.hidden = true;
+      }
+    } else {
+      newActions.hidden = false;
+      notionLink.hidden = true;
+    }
+  }
+
   // Setup state listeners
   document.getElementById('save-setup').addEventListener('click', () => {
     const geminiKey = document.getElementById('gemini-key').value.trim();
@@ -141,7 +214,7 @@
 
   // Preview state listeners
   document.getElementById('preview-back').addEventListener('click', () => {
-    vscode.postMessage({ type: 'clickBack', from: 'preview' });
+    vscode.postMessage({ type: 'clickBack', from: isHistoricalPreview ? 'historical-preview' : 'preview' });
   });
 
   document.getElementById('preview-save').addEventListener('click', () => {
@@ -188,6 +261,32 @@
     vscode.postMessage({ type: 'openSettings' });
   });
 
+  // Clear memory popup
+  document.getElementById('clear-memory-button')?.addEventListener('click', () => {
+    document.getElementById('clear-memory-popup').hidden = false;
+    document.getElementById('clear-export-checkbox').checked = false;
+    document.getElementById('clear-cancel').focus();
+  });
+
+  document.getElementById('clear-cancel')?.addEventListener('click', () => {
+    document.getElementById('clear-memory-popup').hidden = true;
+  });
+
+  document.getElementById('clear-confirm')?.addEventListener('click', () => {
+    const exportFirst = document.getElementById('clear-export-checkbox').checked;
+    document.getElementById('clear-memory-popup').hidden = true;
+    vscode.postMessage({ type: 'clickClearMemory', exportFirst });
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const popup = document.getElementById('clear-memory-popup');
+      if (popup && !popup.hidden) {
+        popup.hidden = true;
+      }
+    }
+  });
+
   // Listen for messages from extension
   window.addEventListener('message', (event) => {
     const msg = event.data;
@@ -196,6 +295,7 @@
         showState(msg.state);
         if (msg.state === STATES.PREVIEW && msg.data?.note) {
           setPreview(msg.data.note);
+          setPreviewMode(!!msg.data.isHistorical, msg.data.notionPageUrl || null);
         }
         if (msg.state === STATES.DUPLICATE && msg.data?.title) {
           document.getElementById('duplicate-title').textContent = msg.data.title;
@@ -224,10 +324,16 @@
         if (msg.description) document.getElementById('form-description').value = msg.description;
         formSubmit.disabled = !msg.title;
         break;
+      case 'setRecentNotes':
+        renderRecentNotes(msg.notes);
+        break;
       case 'prefillSetup':
         document.getElementById('gemini-key').value = msg.geminiKey || '';
         document.getElementById('notion-token').value = msg.notionToken || '';
         document.getElementById('notion-db').value = msg.notionDbId || '';
+        // Only show clear memory section when notes exist
+        var clearSection = document.getElementById('clear-memory-section');
+        if (clearSection) clearSection.hidden = !hasRecentNotes;
         break;
     }
   });
