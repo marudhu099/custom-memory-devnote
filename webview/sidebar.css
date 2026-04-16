@@ -156,6 +156,10 @@ textarea {
   gap: 8px;
 }
 
+.row[hidden] {
+  display: none;
+}
+
 .row .primary-button, .row .secondary-button {
   flex: 1;
 }
