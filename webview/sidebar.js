@@ -100,10 +100,12 @@
 
     if (!notes || notes.length === 0) {
       empty.hidden = false;
+      hasRecentNotes = false;
       return;
     }
 
     empty.hidden = true;
+    hasRecentNotes = true;
 
     notes.forEach((note) => {
       const item = document.createElement('div');
@@ -140,6 +142,7 @@
   }
 
   let isHistoricalPreview = false;
+  let hasRecentNotes = false;
 
   function setPreviewMode(historical, notionPageUrl) {
     isHistoricalPreview = historical;
@@ -328,9 +331,9 @@
         document.getElementById('gemini-key').value = msg.geminiKey || '';
         document.getElementById('notion-token').value = msg.notionToken || '';
         document.getElementById('notion-db').value = msg.notionDbId || '';
-        // Show clear memory section when settings are configured
+        // Only show clear memory section when notes exist
         var clearSection = document.getElementById('clear-memory-section');
-        if (clearSection) clearSection.hidden = false;
+        if (clearSection) clearSection.hidden = !hasRecentNotes;
         break;
     }
   });

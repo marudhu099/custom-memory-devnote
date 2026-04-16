@@ -453,6 +453,10 @@ hr {
   opacity: 0.9;
 }
 
+.full-width {
+  width: 100%;
+}
+
 /* Popup overlay */
 .popup-overlay {
   position: fixed;
