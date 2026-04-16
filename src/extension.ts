@@ -2,16 +2,24 @@ import * as vscode from 'vscode';
 import { ConfigService } from './ConfigService';
 import { SidebarProvider } from './SidebarProvider';
 import { DraftStore } from './DraftStore';
+import { MemoryStore } from './MemoryStore';
 
 export function activate(context: vscode.ExtensionContext) {
   const configService = new ConfigService(context.secrets);
   const draftStore = new DraftStore(context);
+  const memoryStore = new MemoryStore(context);
+
+  // Init memory store in background — non-blocking, best-effort
+  memoryStore.init().catch((err) => {
+    console.error('[DevNote] MemoryStore init failed:', err);
+  });
 
   const sidebarProvider = new SidebarProvider(
     context.extensionUri,
     context,
     configService,
-    draftStore
+    draftStore,
+    memoryStore
   );
 
   context.subscriptions.push(
