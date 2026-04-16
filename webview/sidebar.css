@@ -315,3 +315,199 @@ hr {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* Recent Notes Section */
+.recent-notes-section {
+  margin-top: var(--spacing);
+  border-top: 1px solid var(--vscode-sideBarSectionHeader-border);
+  padding-top: var(--spacing);
+}
+
+.recent-notes-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--vscode-descriptionForeground);
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.recent-notes-empty, .recent-notes-unavailable {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  margin: 8px 0;
+  font-style: italic;
+}
+
+.recent-note-item {
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+
+.recent-note-item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.recent-note-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.recent-note-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--vscode-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.recent-note-date {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.recent-note-branch {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+/* Open in Notion link */
+.notion-link {
+  display: block;
+  font-size: 12px;
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+  margin-top: var(--spacing);
+  text-align: right;
+}
+
+.notion-link:hover {
+  text-decoration: underline;
+}
+
+.notion-link[hidden] {
+  display: none;
+}
+
+/* Clear memory */
+.clear-memory-section {
+  margin-top: var(--spacing);
+}
+
+.clear-memory-section[hidden] {
+  display: none;
+}
+
+.danger-link {
+  background: none;
+  border: none;
+  color: var(--vscode-errorForeground);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 0;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.danger-link:hover {
+  text-decoration: underline;
+}
+
+.danger-button {
+  padding: 10px 16px;
+  background: var(--vscode-inputValidation-errorBackground, #d32f2f);
+  color: #fff;
+  border: 1px solid var(--vscode-inputValidation-errorBorder, #d32f2f);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.danger-button:hover {
+  opacity: 0.9;
+}
+
+/* Popup overlay */
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.popup-overlay[hidden] {
+  display: none;
+}
+
+.popup {
+  background: var(--vscode-sideBar-background);
+  border: 1px solid var(--vscode-sideBarSectionHeader-border);
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 280px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.popup-icon {
+  font-size: 28px;
+  text-align: center;
+}
+
+.popup-title {
+  margin: 0;
+  font-size: 14px;
+  text-align: center;
+}
+
+.popup-body {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.popup-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.popup-checkbox-label input[type="checkbox"] {
+  width: auto;
+}
+
+.popup-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.popup-actions .secondary-button,
+.popup-actions .danger-button {
+  flex: 1;
+}
