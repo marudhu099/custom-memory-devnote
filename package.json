@@ -92,6 +92,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "simple-git": "^3.22.0"
+    "simple-git": "^3.22.0",
+    "sql.js": "^1.14.1"
   }
 }
