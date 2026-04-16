@@ -5,6 +5,24 @@ All notable changes to DevNote will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-04-16
+
+### Added
+
+- Recent Notes — your past notes now appear in the sidebar below Generate Doc, stored locally and viewable instantly without leaving VS Code
+- Local SQLite storage (sql.js) — every synced note is saved to devnote.db on your machine, forming the foundation for future search and memory features
+- Click any past note to preview it inline from local storage (no network needed)
+- "Open in Notion" link in the preview for sharing and mobile access
+- "Clear all memory" button in Settings with confirmation popup and optional backup export
+- Empty state for new users: "Your notes will appear here once you generate your first one."
+
+### Changed
+
+- Idle state now shows the Recent Notes list below the Generate Doc button
+- Preview state now supports historical notes (read-only, no Save/Discard)
+- Settings panel has a new "Clear all memory" section at the bottom
+- NotionService.push() now returns page ID and URL for local storage
+
 ## [0.2.1] — 2026-04-14
 
 ### Fixed

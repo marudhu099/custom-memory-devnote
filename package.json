@@ -1,8 +1,8 @@
 {
   "name": "devnote",
   "displayName": "DevNote",
-  "description": "AI-generated dev notes from git diffs. Save locally, sync to Notion, never lose context again.",
-  "version": "0.2.1",
+  "description": "AI memory for developers. Generate dev notes from git diffs, browse your history, sync to Notion.",
+  "version": "0.3.0",
   "publisher": "marudhu099",
   "author": "Marudhupandiyan",
   "license": "MIT",
