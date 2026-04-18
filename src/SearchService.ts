@@ -31,8 +31,16 @@ export class SearchService {
     this.apiKey = apiKey;
   }
 
-  updateApiKey(newKey: string): void {
+  async updateApiKey(newKey: string): Promise<void> {
     this.apiKey = newKey;
+    if (this.bridge && this.bridge.available) {
+      try {
+        await this.bridge.call('configure', { api_key: newKey });
+      } catch (err) {
+        console.error('[SearchService] updateApiKey configure failed:', err);
+        // Next ensureReady() will re-configure
+      }
+    }
   }
 
   /**
@@ -206,8 +214,14 @@ export class SearchService {
    */
   async reindexAll(): Promise<void> {
     await this.memoryStore.clearAllEmbeddings();
+    this.initialized = false;  // force full re-init + backfill on next ensureReady
     if (this.bridge && this.bridge.available) {
-      await this.bridge.call('warm_load', { rows: [] });
+      try {
+        await this.bridge.call('warm_load', { rows: [] });
+      } catch (err) {
+        console.error('[SearchService] reindexAll warm_load failed:', err);
+        // initialized=false already ensures next ensureReady rebuilds state
+      }
     }
   }
 
