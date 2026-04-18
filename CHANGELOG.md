@@ -5,6 +5,34 @@ All notable changes to DevNote will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-04-18
+
+### Added
+
+- 🔍 Semantic search over all past notes — type a natural-language query, get results ranked by meaning (not keywords)
+- Search input above Recent Notes in the sidebar; morphing header shows mode
+- Similarity score badge on each result (e.g. `87% · 2h`)
+- One-time Python environment setup flow on first search (venv + pip install)
+- One-time backfill indexing for existing notes (uses Gemini batch embedding API)
+- "Reset Python environment" button in Settings (power-user recovery)
+- "Re-index all notes" button in Settings (after embedding model changes)
+- TypeScript + Python hybrid architecture — Python worker runs as a child process, JSON-RPC over stdin/stdout
+
+### Changed
+
+- Note sync now also embeds the note locally (best-effort — failures toast a gentle warning and defer indexing to the next search)
+- Sidebar idle state: Recent Notes section gains a 🔍 search input above it
+- Description updated in package.json to reflect semantic search capability
+
+### Requires
+
+- Python 3.10+ installed on your machine (DevNote will prompt on first search if missing)
+
+### Notes
+
+- Embeddings use `gemini-embedding-001` (Google AI Studio, 3072-dim, L2-normalized) via the `google-genai>=0.8.0` SDK
+- Older SDK (`google-generativeai==0.8.3`) used v1beta endpoint which no longer serves `embedContent` for AI Studio keys; migration required for first release
+
 ## [0.3.0] — 2026-04-16
 
 ### Added

@@ -527,3 +527,60 @@ hr {
 .popup-actions .danger-button {
   flex: 1;
 }
+
+/* Search input */
+.search-input-wrapper {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 28px 8px 10px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.search-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.search-input::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.search-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+}
+
+.search-clear:hover {
+  color: var(--vscode-foreground);
+}
+
+/* Search states */
+.search-empty,
+.search-loading {
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  padding: 12px 4px;
+  line-height: 1.5;
+}
+
+/* Settings utility buttons — small gap */
+.settings-utility-button {
+  margin-top: 8px;
+}

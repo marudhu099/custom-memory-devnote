@@ -208,6 +208,109 @@ const tests = [
       db.close();
     },
   },
+  {
+    name: 'UPDATE embedding stores Float32Array as BLOB',
+    async run(SQL) {
+      const db = new SQL.Database();
+      runMigration(db);
+      insertNote(db, { id: 'uuid-emb', title: 'test', branch: 'main', createdAt: 1000 });
+
+      const fakeEmbedding = new Float32Array(768);
+      fakeEmbedding[0] = 0.5;
+      fakeEmbedding[767] = -0.3;
+      db.run(
+        `UPDATE notes SET embedding = ?, embedding_model = ? WHERE id = ?`,
+        [Buffer.from(fakeEmbedding.buffer), 'text-embedding-005', 'uuid-emb']
+      );
+
+      const result = db.exec('SELECT embedding, embedding_model FROM notes WHERE id = ?', ['uuid-emb']);
+      const blob = result[0].values[0][0];
+      const model = result[0].values[0][1];
+      const decoded = new Float32Array(blob.buffer, blob.byteOffset, blob.byteLength / 4);
+      assert.ok(Math.abs(decoded[0] - 0.5) < 1e-5);
+      assert.ok(Math.abs(decoded[767] - (-0.3)) < 1e-5);
+      assert.strictEqual(model, 'text-embedding-005');
+      db.close();
+    },
+  },
+  {
+    name: 'SELECT WHERE embedding IS NULL returns un-embedded notes',
+    async run(SQL) {
+      const db = new SQL.Database();
+      runMigration(db);
+      insertNote(db, { id: 'null-1', title: 'a', branch: 'main', createdAt: 1000 });
+      db.run(
+        `INSERT INTO notes (id, title, branch_name, content_json, content_markdown, embedding, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ['filled-1', 'b', 'main', SAMPLE_NOTE_JSON, SAMPLE_MARKDOWN, Buffer.from(new Float32Array(768).buffer), 2000]
+      );
+
+      const result = db.exec('SELECT id, content_markdown FROM notes WHERE embedding IS NULL');
+      assert.strictEqual(result[0].values.length, 1);
+      assert.strictEqual(result[0].values[0][0], 'null-1');
+      assert.strictEqual(result[0].values[0][1], SAMPLE_MARKDOWN);
+      db.close();
+    },
+  },
+  {
+    name: 'SELECT all embeddings for warm-load returns ordered list',
+    async run(SQL) {
+      const db = new SQL.Database();
+      runMigration(db);
+      const vec1 = new Float32Array(768);
+      vec1[0] = 0.1;
+      const vec2 = new Float32Array(768);
+      vec2[0] = 0.9;
+
+      db.run(
+        `INSERT INTO notes (id, title, branch_name, content_json, content_markdown, embedding, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ['a', 'a', 'main', SAMPLE_NOTE_JSON, SAMPLE_MARKDOWN, Buffer.from(vec1.buffer), 1000]
+      );
+      db.run(
+        `INSERT INTO notes (id, title, branch_name, content_json, content_markdown, embedding, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ['b', 'b', 'main', SAMPLE_NOTE_JSON, SAMPLE_MARKDOWN, Buffer.from(vec2.buffer), 2000]
+      );
+
+      const result = db.exec('SELECT id, embedding FROM notes WHERE embedding IS NOT NULL');
+      assert.strictEqual(result[0].values.length, 2);
+      const firstBlob = result[0].values[0][1];
+      const firstDecoded = new Float32Array(firstBlob.buffer, firstBlob.byteOffset, firstBlob.byteLength / 4);
+      assert.strictEqual(firstDecoded.length, 768);
+      db.close();
+    },
+  },
+  {
+    name: 'COUNT(*) WHERE embedding IS NULL returns integer',
+    async run(SQL) {
+      const db = new SQL.Database();
+      runMigration(db);
+      insertNote(db, { id: 'null-1', title: 'a', branch: 'main', createdAt: 1000 });
+      insertNote(db, { id: 'null-2', title: 'b', branch: 'main', createdAt: 2000 });
+      const result = db.exec('SELECT COUNT(*) FROM notes WHERE embedding IS NULL');
+      assert.strictEqual(result[0].values[0][0], 2);
+      db.close();
+    },
+  },
+  {
+    name: 'UPDATE nulls embedding and embedding_model for all rows',
+    async run(SQL) {
+      const db = new SQL.Database();
+      runMigration(db);
+      const vec = new Float32Array(768);
+      db.run(
+        `INSERT INTO notes (id, title, branch_name, content_json, content_markdown, embedding, embedding_model, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ['a', 'a', 'main', SAMPLE_NOTE_JSON, SAMPLE_MARKDOWN, Buffer.from(vec.buffer), 'text-embedding-005', 1000]
+      );
+      db.run('UPDATE notes SET embedding = NULL, embedding_model = NULL');
+      const result = db.exec('SELECT embedding, embedding_model FROM notes WHERE id = ?', ['a']);
+      assert.strictEqual(result[0].values[0][0], null);
+      assert.strictEqual(result[0].values[0][1], null);
+      db.close();
+    },
+  },
 ];
 
 async function runTests() {

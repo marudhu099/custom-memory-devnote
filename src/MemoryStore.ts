@@ -254,6 +254,76 @@ export class MemoryStore {
     return JSON.stringify(notes, null, 2);
   }
 
+  async updateEmbedding(id: string, embedding: number[], modelName: string): Promise<void> {
+    if (!this.db) {
+      throw new Error('MemoryStore is not available');
+    }
+    const arr = new Float32Array(embedding);
+    const buf = Buffer.from(arr.buffer);
+
+    this.db.run(
+      `UPDATE notes SET embedding = ?, embedding_model = ? WHERE id = ?`,
+      [buf, modelName, id]
+    );
+    this.persist();
+  }
+
+  async getNotesWithNullEmbedding(): Promise<Array<{ id: string; contentMarkdown: string }>> {
+    if (!this.db || !this._available) {
+      return [];
+    }
+    const result = this.db.exec(
+      'SELECT id, content_markdown FROM notes WHERE embedding IS NULL'
+    );
+    if (result.length === 0) {
+      return [];
+    }
+    return result[0].values.map((row) => ({
+      id: row[0] as string,
+      contentMarkdown: row[1] as string,
+    }));
+  }
+
+  async loadAllEmbeddings(): Promise<Array<{ id: string; embedding: number[] }>> {
+    if (!this.db || !this._available) {
+      return [];
+    }
+    const result = this.db.exec(
+      'SELECT id, embedding FROM notes WHERE embedding IS NOT NULL'
+    );
+    if (result.length === 0) {
+      return [];
+    }
+    return result[0].values.map((row) => {
+      const id = row[0] as string;
+      const blob = row[1] as Uint8Array;
+      const floatArray = new Float32Array(blob.buffer, blob.byteOffset, blob.byteLength / 4);
+      return {
+        id,
+        embedding: Array.from(floatArray),
+      };
+    });
+  }
+
+  async countNullEmbeddings(): Promise<number> {
+    if (!this.db || !this._available) {
+      return 0;
+    }
+    const result = this.db.exec('SELECT COUNT(*) FROM notes WHERE embedding IS NULL');
+    if (result.length === 0) {
+      return 0;
+    }
+    return result[0].values[0][0] as number;
+  }
+
+  async clearAllEmbeddings(): Promise<void> {
+    if (!this.db) {
+      throw new Error('MemoryStore is not available');
+    }
+    this.db.run('UPDATE notes SET embedding = NULL, embedding_model = NULL');
+    this.persist();
+  }
+
   // ── Private helpers ────────────────────────────────────────────
 
   private serializeNoteToMarkdown(note: StructuredNote): string {

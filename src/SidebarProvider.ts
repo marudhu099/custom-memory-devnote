@@ -8,6 +8,7 @@ import { GitService } from './GitService';
 import { GeminiLLMService, NotePayload, StructuredNote } from './LLMService';
 import { MemoryStore } from './MemoryStore';
 import { NotionService } from './NotionService';
+import { SearchService } from './SearchService';
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'devnote.sidebar';
@@ -25,7 +26,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     private readonly context: vscode.ExtensionContext,
     private readonly configService: ConfigService,
     private readonly draftStore: DraftStore,
-    private readonly memoryStore: MemoryStore
+    private readonly memoryStore: MemoryStore,
+    private readonly getSearchService: (apiKey?: string) => SearchService | null,
   ) {}
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -85,6 +87,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             break;
           case 'clickClearMemory':
             await this.handleClearMemory(msg.exportFirst);
+            break;
+          case 'searchQuery':
+            await this.handleSearchQuery(msg.query);
+            break;
+          case 'clearSearch':
+            await this.refreshIdleState();
+            break;
+          case 'clickResetPythonEnv':
+            await this.handleResetPythonEnv();
+            break;
+          case 'clickReindexAll':
+            await this.handleReindexAll();
             break;
         }
       } catch (err) {
@@ -213,6 +227,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     const config = vscode.workspace.getConfiguration('devnote');
     await config.update('notionDatabaseId', notionDbId, vscode.ConfigurationTarget.Global);
+
+    // Update SearchService's API key if it already exists; otherwise it'll be created
+    // lazily on first activation-post-config by extension.ts' activation logic.
+    const searchService = this.getSearchService(geminiKey);
+    if (searchService) {
+      await searchService.updateApiKey(geminiKey);
+    }
 
     this.postMessage({ type: 'setState', state: 'idle' });
   }
@@ -652,12 +673,25 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       if (workspacePath) {
         branchName = await this.tryGetBranchName(new GitService(workspacePath));
       }
-      await this.memoryStore.saveNote(this.currentNote, {
+      const savedId = await this.memoryStore.saveNote(this.currentNote, {
         title: this.pendingFormData?.title ?? this.currentNote.title,
         branchName,
         notionPageId,
         notionPageUrl,
       });
+
+      // Best-effort embed for v0.4.0 search (fails silently → backfill catches later)
+      const searchService = this.getSearchService();
+      if (searchService) {
+        const contentMarkdown = this.serializeNoteToMarkdown(this.currentNote);
+        void searchService.embedNote(savedId, contentMarkdown).then((ok) => {
+          if (!ok) {
+            vscode.window.showInformationMessage(
+              'Note synced. Search indexing will happen on your next search.'
+            );
+          }
+        });
+      }
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       vscode.window.showWarningMessage(
@@ -686,6 +720,96 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     } catch {
       vscode.window.showWarningMessage('Couldn\'t load this note from memory.');
       await this.refreshIdleState();
+    }
+  }
+
+  private async handleSearchQuery(query: string): Promise<void> {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      await this.refreshIdleState();
+      return;
+    }
+
+    const searchService = this.getSearchService();
+    if (!searchService) {
+      this.postMessage({
+        type: 'setSearchResults',
+        query: trimmed,
+        results: [],
+        error: 'Search unavailable — configure Gemini API key first.',
+      });
+      return;
+    }
+
+    // Show loading state
+    this.postMessage({ type: 'setSearchLoading', query: trimmed });
+
+    try {
+      await searchService.ensureReady();
+      const raw = await searchService.searchQuery(trimmed);
+      // Hydrate full metadata
+      const results = [];
+      for (const r of raw) {
+        const note = await this.memoryStore.getNoteById(r.id);
+        if (note) {
+          results.push({
+            id: note.id,
+            title: note.title,
+            branchName: note.branchName,
+            createdAt: note.createdAt,
+            score: r.score,
+          });
+        }
+      }
+      this.postMessage({ type: 'setSearchResults', query: trimmed, results });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      this.postMessage({
+        type: 'setSearchResults',
+        query: trimmed,
+        results: [],
+        error: detail,
+      });
+    }
+  }
+
+  private async handleResetPythonEnv(): Promise<void> {
+    const searchService = this.getSearchService();
+    if (!searchService) return;
+
+    const confirm = await vscode.window.showWarningMessage(
+      'Reset DevNote\'s Python environment? It will be set up again on your next search.',
+      { modal: true },
+      'Reset'
+    );
+    if (confirm !== 'Reset') return;
+
+    try {
+      await searchService.resetEnvironment();
+      vscode.window.showInformationMessage('Python environment reset.');
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`Couldn't reset: ${detail}`);
+    }
+  }
+
+  private async handleReindexAll(): Promise<void> {
+    const searchService = this.getSearchService();
+    if (!searchService) return;
+
+    const confirm = await vscode.window.showWarningMessage(
+      'Re-index all your notes for search? All current embeddings will be cleared and regenerated on your next search.',
+      { modal: true },
+      'Re-index all'
+    );
+    if (confirm !== 'Re-index all') return;
+
+    try {
+      await searchService.reindexAll();
+      vscode.window.showInformationMessage('All notes re-indexed. Next search will regenerate embeddings.');
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`Couldn't re-index: ${detail}`);
     }
   }
 
