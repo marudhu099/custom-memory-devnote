@@ -12,11 +12,12 @@ import json
 import base64
 from typing import Any
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import numpy as np
 
-MODEL_NAME = "embedding-001"
-EMBEDDING_DIM = 768
+MODEL_NAME = "gemini-embedding-001"
+EMBEDDING_DIM = 3072
 
 
 class VectorStore:
@@ -50,30 +51,36 @@ class VectorStore:
 
 store = VectorStore()
 
+client: genai.Client | None = None
+
 
 def configure_api(api_key: str) -> None:
-    genai.configure(api_key=api_key)
+    global client
+    client = genai.Client(api_key=api_key)
 
 
-def embed_text(text: str, task_type: str = "retrieval_document") -> list[float]:
+def embed_text(text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list[float]:
     """Embed a single piece of text via Gemini. Returns 768 floats."""
-    result = genai.embed_content(
-        model=f"models/{MODEL_NAME}",
-        content=text,
-        task_type=task_type,
+    if client is None:
+        raise RuntimeError("Gemini client not configured. Call configure_api first.")
+    response = client.models.embed_content(
+        model=MODEL_NAME,
+        contents=text,
+        config=types.EmbedContentConfig(task_type=task_type.upper()),
     )
-    return list(result["embedding"])
+    return list(response.embeddings[0].values)
 
 
-def batch_embed_texts(texts: list[str], task_type: str = "retrieval_document") -> list[list[float]]:
+def batch_embed_texts(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> list[list[float]]:
     """Embed multiple texts in one API call. Gemini accepts up to 100 per batch."""
-    result = genai.embed_content(
-        model=f"models/{MODEL_NAME}",
-        content=texts,
-        task_type=task_type,
+    if client is None:
+        raise RuntimeError("Gemini client not configured. Call configure_api first.")
+    response = client.models.embed_content(
+        model=MODEL_NAME,
+        contents=texts,
+        config=types.EmbedContentConfig(task_type=task_type.upper()),
     )
-    # result["embedding"] is a list of lists for batch input
-    return [list(e) for e in result["embedding"]]
+    return [list(e.values) for e in response.embeddings]
 
 
 def search(query_vec: np.ndarray, k: int = 5, threshold: float = 0.35) -> list[tuple[str, float]]:
@@ -147,7 +154,7 @@ def handle_message(msg: dict[str, Any]) -> dict[str, Any]:
             query_text = params["query"]
             k = int(params.get("k", 5))
             threshold = float(params.get("threshold", 0.35))
-            query_vec = np.array(embed_text(query_text, task_type="retrieval_query"), dtype=np.float32)
+            query_vec = np.array(embed_text(query_text, task_type="RETRIEVAL_QUERY"), dtype=np.float32)
             results = search(query_vec, k=k, threshold=threshold)
             return {"id": msg_id, "result": {"results": [{"id": nid, "score": s} for nid, s in results]}}
 

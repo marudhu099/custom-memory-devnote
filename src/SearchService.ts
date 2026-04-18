@@ -4,14 +4,14 @@ import { PythonBridge } from './PythonBridge';
 import { MemoryStore } from './MemoryStore';
 import { detectPython, createVenv, pipInstall, deleteVenv, getVenvPaths } from './PythonSetup';
 
-const MODEL_NAME = 'embedding-001';
+const MODEL_NAME = 'gemini-embedding-001';
 const SEARCH_K = 5;
 const SEARCH_THRESHOLD = 0.35;
 const BATCH_SIZE = 100;
 
 const STATE_VENV_READY = 'devnote.venvReady';
 const STATE_PACKAGES_VERSION = 'devnote.packagesVersion';
-const CURRENT_PACKAGES_VERSION = '1.0';
+const CURRENT_PACKAGES_VERSION = '2.0';
 
 export interface RankedResult {
   id: string;

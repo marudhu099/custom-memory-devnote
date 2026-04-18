@@ -3,7 +3,7 @@
 import sys
 import os
 import base64
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import numpy as np
 import pytest
@@ -15,27 +15,32 @@ import worker
 
 @pytest.fixture(autouse=True)
 def reset_store():
-    """Reset the module-level store between tests."""
+    """Reset the module-level store and set up a mock client between tests."""
     worker.store = worker.VectorStore()
+    worker.client = MagicMock()
     yield
 
 
 def test_embed_text_returns_768_floats():
-    fake_embedding = [0.1] * worker.EMBEDDING_DIM
-    with patch("worker.genai.embed_content") as mock:
-        mock.return_value = {"embedding": fake_embedding}
-        result = worker.embed_text("test note")
-        assert len(result) == worker.EMBEDDING_DIM
-        assert all(isinstance(x, float) for x in result)
+    fake_embedding = MagicMock(values=[0.1] * worker.EMBEDDING_DIM)
+    fake_response = MagicMock(embeddings=[fake_embedding])
+    worker.client.models.embed_content.return_value = fake_response
+    result = worker.embed_text("test note")
+    assert len(result) == worker.EMBEDDING_DIM
+    assert all(isinstance(x, float) for x in result)
 
 
 def test_batch_embed_returns_multiple_vectors():
-    fake_batch = [[0.1] * worker.EMBEDDING_DIM, [0.2] * worker.EMBEDDING_DIM, [0.3] * worker.EMBEDDING_DIM]
-    with patch("worker.genai.embed_content") as mock:
-        mock.return_value = {"embedding": fake_batch}
-        results = worker.batch_embed_texts(["a", "b", "c"])
-        assert len(results) == 3
-        assert all(len(v) == worker.EMBEDDING_DIM for v in results)
+    fake_embeddings = [
+        MagicMock(values=[0.1] * worker.EMBEDDING_DIM),
+        MagicMock(values=[0.2] * worker.EMBEDDING_DIM),
+        MagicMock(values=[0.3] * worker.EMBEDDING_DIM),
+    ]
+    fake_response = MagicMock(embeddings=fake_embeddings)
+    worker.client.models.embed_content.return_value = fake_response
+    results = worker.batch_embed_texts(["a", "b", "c"])
+    assert len(results) == 3
+    assert all(len(v) == worker.EMBEDDING_DIM for v in results)
 
 
 def test_vector_store_warm_load():
@@ -117,7 +122,7 @@ def test_handle_message_embed_success():
         assert response["id"] == "1"
         assert "result" in response
         assert len(response["result"]["embedding"]) == worker.EMBEDDING_DIM
-        assert response["result"]["model"] == "embedding-001"
+        assert response["result"]["model"] == "gemini-embedding-001"
 
 
 def test_handle_message_propagates_errors():
