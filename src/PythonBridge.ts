@@ -31,6 +31,7 @@ export class PythonBridge {
   private crashCount = 0;
   private disabled = false;
   private buffer = '';
+  private shuttingDown = false;
 
   constructor(
     private readonly pythonPath: string,
@@ -78,6 +79,7 @@ export class PythonBridge {
 
   async shutdown(): Promise<void> {
     if (this.proc && !this.proc.killed) {
+      this.shuttingDown = true;
       this.proc.kill();
       this.proc = null;
     }
@@ -118,6 +120,11 @@ export class PythonBridge {
   }
 
   private onExit(code: number | null): void {
+    if (this.shuttingDown) {
+      this.pending.clear();
+      this.proc = null;
+      return;
+    }
     // Reject all pending calls
     const err = new Error(`Python worker exited (code=${code})`);
     this.pending.forEach((p) => p.reject(err));
