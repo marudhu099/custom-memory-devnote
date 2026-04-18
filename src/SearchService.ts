@@ -22,6 +22,7 @@ export class SearchService {
   private bridge: PythonBridge | null = null;
   private initialized = false;
   private apiKey: string;
+  private ensureReadyInFlight: Promise<void> | null = null;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -45,9 +46,25 @@ export class SearchService {
 
   /**
    * Ensures Python, venv, worker, and backfill are all ready before any search.
+   * Deduplicates concurrent calls via promise chaining.
    * Shows progress notifications. Throws on unrecoverable errors.
    */
   async ensureReady(): Promise<void> {
+    if (this.ensureReadyInFlight) {
+      return this.ensureReadyInFlight;
+    }
+    this.ensureReadyInFlight = this._ensureReadyInner();
+    try {
+      await this.ensureReadyInFlight;
+    } finally {
+      this.ensureReadyInFlight = null;
+    }
+  }
+
+  /**
+   * Inner implementation of ensureReady. Called once per setup cycle.
+   */
+  private async _ensureReadyInner(): Promise<void> {
     // Step 1: check Python 3.10+
     const python = await detectPython();
     if (!python) {

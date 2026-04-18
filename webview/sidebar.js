@@ -146,6 +146,17 @@
   let searchMode = false;  // true when user is actively searching
   let currentQuery = '';
 
+  function resetSearchUI() {
+    const header = document.getElementById('recent-notes-header');
+    const list = document.getElementById('recent-notes-list');
+    const searchEmpty = document.getElementById('search-empty');
+    const searchLoading = document.getElementById('search-loading');
+    if (header) header.textContent = 'Recent Notes';
+    if (list) list.innerHTML = '';
+    if (searchEmpty) searchEmpty.hidden = true;
+    if (searchLoading) searchLoading.hidden = true;
+  }
+
   function renderSearchResults(query, results, error) {
     const header = document.getElementById('recent-notes-header');
     const list = document.getElementById('recent-notes-list');
@@ -357,6 +368,7 @@
     if (value.trim().length === 0) {
       searchMode = false;
       currentQuery = '';
+      resetSearchUI();
       vscode.postMessage({ type: 'clearSearch' });
       return;
     }
@@ -382,6 +394,7 @@
     searchClear.hidden = true;
     searchMode = false;
     currentQuery = '';
+    resetSearchUI();
     vscode.postMessage({ type: 'clearSearch' });
   });
 

@@ -109,7 +109,12 @@ export function pipInstall(venvPath: string, requirementsPath: string): Promise<
  */
 export function deleteVenv(venvPath: string): void {
   if (fs.existsSync(venvPath)) {
-    fs.rmSync(venvPath, { recursive: true, force: true });
+    fs.rmSync(venvPath, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,      // Windows: retry if .pyd files briefly locked
+      retryDelay: 500,    // 500ms between attempts
+    });
   }
 }
 

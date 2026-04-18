@@ -79,9 +79,18 @@ export class PythonBridge {
 
   async shutdown(): Promise<void> {
     if (this.proc && !this.proc.killed) {
+      const proc = this.proc;
       this.shuttingDown = true;
-      this.proc.kill();
       this.proc = null;
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const done = () => { if (!settled) { settled = true; resolve(); } };
+        proc.once('exit', done);
+        proc.once('error', done);
+        proc.kill();
+        // Safety: don't wait forever if process hangs
+        setTimeout(done, 3000);
+      });
     }
     this.pending.forEach((p) => p.reject(new Error('PythonBridge shut down')));
     this.pending.clear();
