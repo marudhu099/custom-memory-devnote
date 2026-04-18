@@ -39,15 +39,20 @@ function checkPythonVersion(pythonPath: string): Promise<PythonInfo | null> {
   return new Promise((resolve) => {
     const child = spawn(pythonPath, ['-c', 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")']);
     let stdout = '';
+    let stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
-    child.on('exit', (code) => {
+    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    // 'close' fires after stdio streams drain — unlike 'exit' which can race with fast commands on Windows
+    child.on('close', (code: number | null) => {
       if (code !== 0) {
+        console.error(`[PythonSetup] ${pythonPath} exited ${code}: stderr="${stderr.trim()}"`);
         resolve(null);
         return;
       }
-      const versionStr = stdout.trim();
-      const match = versionStr.match(/^(\d+)\.(\d+)\.(\d+)/);
+      const versionStr = stdout.replace(/^\uFEFF/, '').trim();  // strip BOM if present
+      const match = versionStr.match(/(\d+)\.(\d+)\.(\d+)/);  // dropped ^ anchor — BOM/prefix-safe
       if (!match) {
+        console.error(`[PythonSetup] ${pythonPath} gave unparseable version: "${versionStr}"`);
         resolve(null);
         return;
       }
@@ -57,7 +62,10 @@ function checkPythonVersion(pythonPath: string): Promise<PythonInfo | null> {
         majorMinor: [parseInt(match[1], 10), parseInt(match[2], 10)],
       });
     });
-    child.on('error', () => resolve(null));
+    child.on('error', (err: Error) => {
+      console.error(`[PythonSetup] ${pythonPath} spawn error:`, err.message);
+      resolve(null);
+    });
   });
 }
 
