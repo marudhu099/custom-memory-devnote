@@ -41,6 +41,12 @@
       <div class="clear-memory-section" id="clear-memory-section" hidden>
         <hr />
         <button class="danger-button full-width" id="clear-memory-button">Clear all memory</button>
+        <button class="secondary-button full-width settings-utility-button" id="reset-python-env-button" hidden>
+          Reset Python environment
+        </button>
+        <button class="secondary-button full-width settings-utility-button" id="reindex-all-button" hidden>
+          Re-index all notes
+        </button>
       </div>
 
       <!-- Clear memory confirmation popup -->
@@ -82,11 +88,23 @@
       <p class="disabled-reason" id="disabled-reason" hidden></p>
 
       <div class="recent-notes-section">
-        <div class="recent-notes-header">Recent Notes</div>
+        <div class="search-input-wrapper">
+          <input
+            type="text"
+            id="search-input"
+            class="search-input"
+            placeholder="Search your memory..."
+            autocomplete="off"
+          />
+          <button class="search-clear" id="search-clear" hidden title="Clear search">✕</button>
+        </div>
+        <div class="recent-notes-header" id="recent-notes-header">Recent Notes</div>
         <div id="recent-notes-list"></div>
         <p class="recent-notes-empty" id="recent-notes-empty">
           Your notes will appear here once you generate your first one.
         </p>
+        <p class="search-empty" id="search-empty" hidden></p>
+        <p class="search-loading" id="search-loading" hidden>Searching memory…</p>
         <p class="recent-notes-unavailable" id="recent-notes-unavailable" hidden>
           Memory unavailable — notes will still sync to Notion but won't appear here.
         </p>
