@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Python 3.10+ installed on your machine (DevNote will prompt on first search if missing)
 
+### Notes
+
+- Embeddings use `gemini-embedding-001` (Google AI Studio, 3072-dim, L2-normalized) via the `google-genai>=0.8.0` SDK
+- Older SDK (`google-generativeai==0.8.3`) used v1beta endpoint which no longer serves `embedContent` for AI Studio keys; migration required for first release
+
 ## [0.3.0] — 2026-04-16
 
 ### Added
