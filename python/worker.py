@@ -15,7 +15,7 @@ from typing import Any
 import google.generativeai as genai
 import numpy as np
 
-MODEL_NAME = "text-embedding-004"
+MODEL_NAME = "embedding-001"
 EMBEDDING_DIM = 768
 
 
@@ -84,7 +84,7 @@ def search(query_vec: np.ndarray, k: int = 5, threshold: float = 0.35) -> list[t
     if store.count() == 0:
         return []
 
-    # Dot product — embeddings are pre-normalized by text-embedding-004
+    # Dot product — embeddings are pre-normalized by embedding-001
     scores = store.matrix @ query_vec.astype(np.float32)
 
     # argpartition for O(N) top-k, then sort just those k

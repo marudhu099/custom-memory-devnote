@@ -4,7 +4,7 @@ import { PythonBridge } from './PythonBridge';
 import { MemoryStore } from './MemoryStore';
 import { detectPython, createVenv, pipInstall, deleteVenv, getVenvPaths } from './PythonSetup';
 
-const MODEL_NAME = 'text-embedding-004';
+const MODEL_NAME = 'embedding-001';
 const SEARCH_K = 5;
 const SEARCH_THRESHOLD = 0.35;
 const BATCH_SIZE = 100;

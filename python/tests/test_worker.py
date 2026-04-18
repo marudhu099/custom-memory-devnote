@@ -117,7 +117,7 @@ def test_handle_message_embed_success():
         assert response["id"] == "1"
         assert "result" in response
         assert len(response["result"]["embedding"]) == worker.EMBEDDING_DIM
-        assert response["result"]["model"] == "text-embedding-004"
+        assert response["result"]["model"] == "embedding-001"
 
 
 def test_handle_message_propagates_errors():
