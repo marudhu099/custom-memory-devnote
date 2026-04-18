@@ -27,7 +27,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     private readonly configService: ConfigService,
     private readonly draftStore: DraftStore,
     private readonly memoryStore: MemoryStore,
-    private readonly getSearchService: () => SearchService | null,
+    private readonly getSearchService: (apiKey?: string) => SearchService | null,
   ) {}
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -230,7 +230,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     // Update SearchService's API key if it already exists; otherwise it'll be created
     // lazily on first activation-post-config by extension.ts' activation logic.
-    const searchService = this.getSearchService();
+    const searchService = this.getSearchService(geminiKey);
     if (searchService) {
       await searchService.updateApiKey(geminiKey);
     }

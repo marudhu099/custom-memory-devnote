@@ -30,7 +30,12 @@ export function activate(context: vscode.ExtensionContext) {
     configService,
     draftStore,
     memoryStore,
-    () => searchService,
+    (apiKey?: string) => {
+      if (!searchService && apiKey) {
+        searchService = new SearchService(context, memoryStore, apiKey);
+      }
+      return searchService;
+    },
   );
 
   context.subscriptions.push(
