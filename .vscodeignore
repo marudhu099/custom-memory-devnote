@@ -26,3 +26,11 @@ out/**/*.map
 
 # Other
 .github/**
+
+# Python worker (include runtime files, exclude tests)
+!python/worker.py
+!python/requirements.txt
+python/tests/**
+python/.venv-test/**
+python/__pycache__/
+python/.pytest_cache/
