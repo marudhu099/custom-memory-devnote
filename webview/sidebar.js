@@ -143,6 +143,71 @@
 
   let isHistoricalPreview = false;
   let hasRecentNotes = false;
+  let searchMode = false;  // true when user is actively searching
+  let currentQuery = '';
+
+  function renderSearchResults(query, results, error) {
+    const header = document.getElementById('recent-notes-header');
+    const list = document.getElementById('recent-notes-list');
+    const emptyNotes = document.getElementById('recent-notes-empty');
+    const searchEmpty = document.getElementById('search-empty');
+    const searchLoading = document.getElementById('search-loading');
+
+    emptyNotes.hidden = true;
+    searchLoading.hidden = true;
+    list.innerHTML = '';
+
+    if (error) {
+      header.textContent = 'Search unavailable';
+      searchEmpty.textContent = error;
+      searchEmpty.hidden = false;
+      return;
+    }
+
+    if (!results || results.length === 0) {
+      header.textContent = `0 results for "${query}"`;
+      searchEmpty.textContent = `No strong matches for "${query}". Try different keywords or click ✕ to go back.`;
+      searchEmpty.hidden = false;
+      return;
+    }
+
+    searchEmpty.hidden = true;
+    header.textContent = `${results.length} result${results.length === 1 ? '' : 's'} for "${query}"`;
+
+    results.forEach((note) => {
+      const item = document.createElement('div');
+      item.className = 'recent-note-item';
+      item.dataset.id = note.id;
+
+      const topRow = document.createElement('div');
+      topRow.className = 'recent-note-top';
+
+      const title = document.createElement('span');
+      title.className = 'recent-note-title';
+      title.textContent = note.title;
+
+      const scoreAndDate = document.createElement('span');
+      scoreAndDate.className = 'recent-note-date';
+      const pct = Math.round(note.score * 100);
+      scoreAndDate.textContent = `${pct}% · ${formatTime(note.createdAt)}`;
+
+      topRow.appendChild(title);
+      topRow.appendChild(scoreAndDate);
+
+      const branch = document.createElement('div');
+      branch.className = 'recent-note-branch';
+      branch.textContent = note.branchName;
+
+      item.appendChild(topRow);
+      item.appendChild(branch);
+
+      item.addEventListener('click', () => {
+        vscode.postMessage({ type: 'clickRecentNote', id: note.id });
+      });
+
+      list.appendChild(item);
+    });
+  }
 
   function setPreviewMode(historical, notionPageUrl) {
     isHistoricalPreview = historical;
@@ -278,6 +343,57 @@
     vscode.postMessage({ type: 'clickClearMemory', exportFirst });
   });
 
+  // Search input with debounce + clear button
+  const searchInput = document.getElementById('search-input');
+  const searchClear = document.getElementById('search-clear');
+  let searchDebounce = null;
+
+  searchInput?.addEventListener('input', () => {
+    const value = searchInput.value;
+    searchClear.hidden = value.length === 0;
+
+    if (searchDebounce) clearTimeout(searchDebounce);
+
+    if (value.trim().length === 0) {
+      searchMode = false;
+      currentQuery = '';
+      vscode.postMessage({ type: 'clearSearch' });
+      return;
+    }
+
+    searchDebounce = setTimeout(() => {
+      currentQuery = value.trim();
+      searchMode = true;
+      // Show loading state
+      const loading = document.getElementById('search-loading');
+      const empty = document.getElementById('recent-notes-empty');
+      const list = document.getElementById('recent-notes-list');
+      list.innerHTML = '';
+      empty.hidden = true;
+      if (loading) loading.hidden = false;
+      document.getElementById('recent-notes-header').textContent = `Searching "${currentQuery}"…`;
+
+      vscode.postMessage({ type: 'searchQuery', query: currentQuery });
+    }, 300);
+  });
+
+  searchClear?.addEventListener('click', () => {
+    searchInput.value = '';
+    searchClear.hidden = true;
+    searchMode = false;
+    currentQuery = '';
+    vscode.postMessage({ type: 'clearSearch' });
+  });
+
+  // Reset Python env + Re-index all buttons (Settings)
+  document.getElementById('reset-python-env-button')?.addEventListener('click', () => {
+    vscode.postMessage({ type: 'clickResetPythonEnv' });
+  });
+
+  document.getElementById('reindex-all-button')?.addEventListener('click', () => {
+    vscode.postMessage({ type: 'clickReindexAll' });
+  });
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       const popup = document.getElementById('clear-memory-popup');
@@ -334,6 +450,24 @@
         // Only show clear memory section when notes exist
         var clearSection = document.getElementById('clear-memory-section');
         if (clearSection) clearSection.hidden = !hasRecentNotes;
+        // Reveal utility buttons
+        var resetBtn = document.getElementById('reset-python-env-button');
+        var reindexBtn = document.getElementById('reindex-all-button');
+        if (resetBtn) resetBtn.hidden = false;
+        if (reindexBtn) reindexBtn.hidden = !hasRecentNotes;
+        break;
+      case 'setSearchLoading':
+        {
+          const loading = document.getElementById('search-loading');
+          const header = document.getElementById('recent-notes-header');
+          const list = document.getElementById('recent-notes-list');
+          if (loading) loading.hidden = false;
+          if (list) list.innerHTML = '';
+          if (header) header.textContent = `Searching "${msg.query}"…`;
+        }
+        break;
+      case 'setSearchResults':
+        renderSearchResults(msg.query, msg.results, msg.error);
         break;
     }
   });
