@@ -5,6 +5,12 @@ All notable changes to DevNote will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] — 2026-04-19
+
+### Fixed
+
+- Search threshold re-calibrated for `gemini-embedding-001`: raised `SEARCH_THRESHOLD` from `0.35` to `0.70`. The higher-dimensional (3072) embeddings produce a different similarity distribution where random/unrelated queries score 0.55–0.65 — the old 0.35 floor (calibrated for 768-dim text-embedding-004) let that noise through. With 0.70, only topically-relevant matches (typically 0.75–0.95) appear in results.
+
 ## [0.4.1] — 2026-04-19
 
 ### Fixed

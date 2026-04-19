@@ -6,7 +6,7 @@ import { detectPython, createVenv, pipInstall, deleteVenv, getVenvPaths } from '
 
 const MODEL_NAME = 'gemini-embedding-001';
 const SEARCH_K = 5;
-const SEARCH_THRESHOLD = 0.35;
+const SEARCH_THRESHOLD = 0.70;
 const BATCH_SIZE = 100;
 
 const STATE_VENV_READY = 'devnote.venvReady';
