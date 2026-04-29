@@ -19,6 +19,73 @@ import numpy as np
 MODEL_NAME = "gemini-embedding-001"
 EMBEDDING_DIM = 3072
 
+PRIMARY_CHAT_MODEL = "gemini-2.5-flash"
+FALLBACK_CHAT_MODEL = "gemini-2.5-flash-lite"
+CHAT_TEMPERATURE = 0.1
+CHAT_MAX_OUTPUT_TOKENS = 1024
+
+# Sentinel returned by streaming handlers — tells main() the response was already written
+_STREAM_HANDLED: dict = {"__stream_handled__": True}
+
+
+def _emit_stream_message(msg_id: Any, payload: dict) -> None:
+    """Write one streaming JSON message and flush stdout immediately.
+
+    Without flush(), OS line-buffering holds chunks for seconds → user sees a wall
+    of text instead of a smooth stream (Lesson 4 streaming gotcha #2).
+    """
+    sys.stdout.write(json.dumps({"id": msg_id, **payload}) + "\n")
+    sys.stdout.flush()
+
+
+def _stream_with_model(model_name: str, prompt: str, msg_id: Any) -> str:
+    """Stream one Gemini chat call. Emits stream messages per chunk; returns assembled text."""
+    if client is None:
+        raise RuntimeError("Gemini client not configured. Call configure first.")
+    config = types.GenerateContentConfig(
+        temperature=CHAT_TEMPERATURE,
+        max_output_tokens=CHAT_MAX_OUTPUT_TOKENS,
+    )
+    final_parts: list[str] = []
+    for chunk in client.models.generate_content_stream(
+        model=model_name,
+        contents=prompt,
+        config=config,
+    ):
+        text = getattr(chunk, "text", None)
+        if text:
+            final_parts.append(text)
+            _emit_stream_message(msg_id, {"type": "stream", "text": text})
+    return "".join(final_parts)
+
+
+def stream_generate(prompt: str, msg_id: Any) -> dict:
+    """Try Flash first; fall back to Flash-Lite on any error. Emits final 'done' or 'error'."""
+    try:
+        final_text = _stream_with_model(PRIMARY_CHAT_MODEL, prompt, msg_id)
+        _emit_stream_message(msg_id, {
+            "type": "done",
+            "result": {"final": final_text, "model": PRIMARY_CHAT_MODEL},
+        })
+        return _STREAM_HANDLED
+    except Exception as primary_err:
+        try:
+            final_text = _stream_with_model(FALLBACK_CHAT_MODEL, prompt, msg_id)
+            _emit_stream_message(msg_id, {
+                "type": "done",
+                "result": {
+                    "final": final_text,
+                    "model": FALLBACK_CHAT_MODEL,
+                    "fallback_reason": str(primary_err),
+                },
+            })
+            return _STREAM_HANDLED
+        except Exception as fallback_err:
+            _emit_stream_message(msg_id, {
+                "error": f"Both chat models failed. Primary: {primary_err}. Fallback: {fallback_err}",
+            })
+            return _STREAM_HANDLED
+
 
 class VectorStore:
     """In-memory mirror of the SQLite embedding column, optimized for search."""
@@ -161,6 +228,10 @@ def handle_message(msg: dict[str, Any]) -> dict[str, Any]:
         if method == "stats":
             return {"id": msg_id, "result": {"count": store.count(), "model": MODEL_NAME}}
 
+        if method == "stream_generate":
+            prompt = params["prompt"]
+            return stream_generate(prompt, msg_id)
+
         return {"id": msg_id, "error": f"unknown method: {method}"}
 
     except Exception as e:
@@ -180,6 +251,8 @@ def main() -> None:
             print(f"[worker] JSON decode error: {e}", file=sys.stderr, flush=True)
             continue
         response = handle_message(msg)
+        if response is None or response.get("__stream_handled__"):
+            continue   # streaming handler already wrote its own messages
         print(json.dumps(response), flush=True)
 
 

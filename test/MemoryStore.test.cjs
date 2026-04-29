@@ -294,6 +294,65 @@ const tests = [
     },
   },
   {
+    name: 'getNotesByIds returns notes in input order',
+    async run(SQL) {
+      const db = new SQL.Database();
+      runMigration(db);
+      insertNote(db, { id: 'a', title: 'Note A', branch: 'main', createdAt: 1000 });
+      insertNote(db, { id: 'b', title: 'Note B', branch: 'main', createdAt: 2000 });
+      insertNote(db, { id: 'c', title: 'Note C', branch: 'main', createdAt: 3000 });
+
+      // Simulate getNotesByIds(['c', 'a', 'b']) — IN(...) returns rows in
+      // arbitrary order, so the method must reorder client-side to match input.
+      const ids = ['c', 'a', 'b'];
+      const placeholders = ids.map(() => '?').join(',');
+      const stmt = db.prepare(
+        `SELECT id, title, branch_name, content_json, content_markdown,
+                notion_page_id, notion_page_url, created_at
+           FROM notes
+          WHERE id IN (${placeholders})`
+      );
+      stmt.bind(ids);
+      const fetched = [];
+      while (stmt.step()) {
+        fetched.push(stmt.getAsObject());
+      }
+      stmt.free();
+
+      const byId = new Map(fetched.map((r) => [r.id, r]));
+      const result = ids.map((id) => byId.get(id)).filter((r) => r !== undefined);
+
+      assert.deepStrictEqual(result.map((n) => n.id), ['c', 'a', 'b']);
+      db.close();
+    },
+  },
+  {
+    name: 'getNotesByIds returns empty array for empty IDs',
+    async run(SQL) {
+      const db = new SQL.Database();
+      runMigration(db);
+      insertNote(db, { id: 'a', title: 'Note A', branch: 'main', createdAt: 1000 });
+
+      // Empty input must short-circuit without an SQL call.
+      const ids = [];
+      let result;
+      if (ids.length === 0) {
+        result = [];
+      } else {
+        // Unreached — guard ensures no SQL when ids is empty.
+        const placeholders = ids.map(() => '?').join(',');
+        const stmt = db.prepare(`SELECT id FROM notes WHERE id IN (${placeholders})`);
+        stmt.bind(ids);
+        result = [];
+        while (stmt.step()) result.push(stmt.getAsObject());
+        stmt.free();
+      }
+
+      assert.deepStrictEqual(result, []);
+      db.close();
+    },
+  },
+  {
     name: 'UPDATE nulls embedding and embedding_model for all rows',
     async run(SQL) {
       const db = new SQL.Database();

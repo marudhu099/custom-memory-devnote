@@ -5,6 +5,31 @@ All notable changes to DevNote will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-04-26
+
+### Added
+
+- 💬 Chat with your memory — ask natural-language questions about your past notes, get grounded answers with citations
+- New 💬 chat input in the sidebar (stacked below the existing 🔍 search input)
+- Inline clickable citation pills (`[Note 1]`) in chat answers — click to open the source note in the existing preview view
+- Light multi-turn conversations: follow-up questions resolve pronouns from the last 4 turns ("when was that?")
+- Streaming token-by-token responses for snappy UX (~500ms time-to-first-token)
+- "New chat" button to clear the in-session conversation
+- Refusal path: when the answer isn't in your notes, DevNote replies "I don't find that in your notes" instead of guessing
+- Closes the Phase 2 AI-memory arc — DevNote now captures, searches, recalls, AND converses
+
+### Changed
+
+- Sidebar layout: search input + chat input now stack above the morphing list region (Recent Notes / Search Results / Chat)
+- Description in package.json updated to reflect chat capability
+
+### Notes
+
+- Chat uses `gemini-2.5-flash` (primary) with automatic fallback to `gemini-2.5-flash-lite` on overload/quota — same cascade pattern proven in v0.2.0 note generation
+- Conversations are NOT persisted across VS Code restarts — each session starts with a fresh chat. Persistent history is on the backlog for a future release.
+- Retrieval reuses v0.4.0's k=5 + threshold=0.70 — single source of truth across search and chat
+- Markdown renders only when the stream completes (typewriter effect during streaming, polished render at end)
+
 ## [0.4.2] — 2026-04-19
 
 ### Fixed

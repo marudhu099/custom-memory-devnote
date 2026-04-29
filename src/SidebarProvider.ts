@@ -9,6 +9,7 @@ import { GeminiLLMService, NotePayload, StructuredNote } from './LLMService';
 import { MemoryStore } from './MemoryStore';
 import { NotionService } from './NotionService';
 import { SearchService } from './SearchService';
+import { ChatService, CitationRef } from './ChatService';
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'devnote.sidebar';
@@ -28,6 +29,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     private readonly draftStore: DraftStore,
     private readonly memoryStore: MemoryStore,
     private readonly getSearchService: (apiKey?: string) => SearchService | null,
+    private readonly getChatService: (apiKey?: string) => ChatService | null,
   ) {}
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -99,6 +101,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             break;
           case 'clickReindexAll':
             await this.handleReindexAll();
+            break;
+          case 'chat-ask':
+            await this.handleChatAsk(msg.query);
+            break;
+          case 'chat-clear':
+            this.handleChatClear();
+            break;
+          case 'chat-open-note':
+            await this.handleClickRecentNote(msg.noteId);
             break;
         }
       } catch (err) {
@@ -842,6 +853,41 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         vscode.window.showErrorMessage(`Couldn't clear memory. Please try again. (${detail})`);
       }
     }
+  }
+
+  private async handleChatAsk(query: string): Promise<void> {
+    if (!query || query.trim().length === 0) return;
+
+    const apiKey = await this.configService.getGeminiApiKey();
+    const chatService = this.getChatService(apiKey ?? undefined);
+    if (!chatService) {
+      this.postMessage({
+        type: 'chat-error',
+        message: 'Chat unavailable — configure Gemini API key first.',
+      });
+      return;
+    }
+
+    // Echo the user turn to the webview immediately so it appears before retrieval delay.
+    this.postMessage({ type: 'chat-user-turn', text: query });
+
+    await chatService.askQuestion(query, {
+      onChunk: (text: string) => {
+        this.postMessage({ type: 'chat-token', text });
+      },
+      onDone: (finalText: string, citations: CitationRef[]) => {
+        this.postMessage({ type: 'chat-done', finalText, citations });
+      },
+      onError: (err: Error) => {
+        this.postMessage({ type: 'chat-error', message: err.message });
+      },
+    });
+  }
+
+  private handleChatClear(): void {
+    const chatService = this.getChatService();
+    chatService?.clearHistory();
+    this.postMessage({ type: 'chat-cleared' });
   }
 
   private postMessage(msg: any): void {

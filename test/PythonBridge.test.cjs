@@ -80,6 +80,26 @@ async function runTests() {
     }
   });
 
+  await test('callStream invokes onChunk per chunk and resolves on done', async () => {
+    const chunks = [];
+    const result = await bridge.callStream('stream_generate', {}, (text) => {
+      chunks.push(text);
+    });
+
+    assert.deepStrictEqual(chunks, ['Hello ', 'from ', 'mock']);
+    assert.strictEqual(result.final, 'Hello from mock');
+    assert.strictEqual(result.model, 'mock-flash');
+  });
+
+  await test('callStream rejects on mid-stream error and cleans up handler', async () => {
+    const chunks = [];
+    await assert.rejects(
+      bridge.callStream('error_stream', {}, (text) => chunks.push(text)),
+      /simulated mid-stream failure/,
+    );
+    assert.deepStrictEqual(chunks, ['partial']);
+  });
+
   await bridge.shutdown();
 
   await test('call after shutdown rejects', async () => {

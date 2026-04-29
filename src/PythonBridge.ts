@@ -13,6 +13,12 @@ interface PendingCall {
   reject: (err: Error) => void;
 }
 
+interface StreamHandler {
+  onChunk: (text: string) => void;
+  resolve: (result: { final: string; model: string; fallbackReason?: string }) => void;
+  reject: (err: Error) => void;
+}
+
 /**
  * Manages a Python subprocess and routes JSON-RPC messages over stdin/stdout.
  *
@@ -27,6 +33,7 @@ interface PendingCall {
 export class PythonBridge {
   private proc: ChildProcessWithoutNullStreams | null = null;
   private pending = new Map<string, PendingCall>();
+  private streamHandlers = new Map<string, StreamHandler>();
   private seq = 0;
   private crashCount = 0;
   private disabled = false;
@@ -77,6 +84,37 @@ export class PythonBridge {
     });
   }
 
+  async callStream(
+    method: string,
+    params: Record<string, any>,
+    onChunk: (text: string) => void,
+  ): Promise<{ final: string; model: string; fallbackReason?: string }> {
+    if (this.disabled) {
+      throw new Error('PythonBridge disabled after repeated crashes. Restart VS Code.');
+    }
+    if (!this.proc || this.proc.killed) {
+      throw new Error('PythonBridge: worker not running');
+    }
+    const id = String(++this.seq);
+
+    return new Promise((resolve, reject) => {
+      this.streamHandlers.set(id, {
+        onChunk,
+        resolve: (result) => {
+          this.streamHandlers.delete(id);
+          resolve(result);
+        },
+        reject: (err) => {
+          this.streamHandlers.delete(id);
+          reject(err);
+        },
+      });
+
+      const msg = JSON.stringify({ id, method, params }) + '\n';
+      this.proc!.stdin.write(msg);
+    });
+  }
+
   async shutdown(): Promise<void> {
     if (this.proc && !this.proc.killed) {
       const proc = this.proc;
@@ -94,6 +132,8 @@ export class PythonBridge {
     }
     this.pending.forEach((p) => p.reject(new Error('PythonBridge shut down')));
     this.pending.clear();
+    this.streamHandlers.forEach((h) => h.reject(new Error('PythonBridge shut down')));
+    this.streamHandlers.clear();
   }
 
   private onStdout(chunk: Buffer): void {
@@ -108,19 +148,52 @@ export class PythonBridge {
   }
 
   private handleResponse(line: string): void {
-    let msg: { id: string; result?: unknown; error?: string };
+    let msg: {
+      id: string | number;
+      type?: string;
+      text?: string;
+      result?: any;
+      error?: string;
+    };
     try {
       msg = JSON.parse(line);
     } catch {
       console.error(`[PythonBridge] invalid JSON from worker: ${line}`);
       return;
     }
-    const pending = this.pending.get(msg.id);
+    const id = String(msg.id);
+
+    // Streaming case: route stream chunks and done message
+    const streamHandler = this.streamHandlers.get(id);
+    if (streamHandler) {
+      if (msg.type === 'stream') {
+        streamHandler.onChunk(msg.text ?? '');
+        return;
+      }
+      if (msg.type === 'done') {
+        // worker.py emits: {"id":..., "type":"done", "result": {final, model, fallback_reason?}}
+        const r = msg.result || {};
+        streamHandler.resolve({
+          final: r.final ?? '',
+          model: r.model ?? '',
+          fallbackReason: r.fallback_reason, // snake_case from Python -> camelCase in TS
+        });
+        return;
+      }
+      if (msg.error) {
+        streamHandler.reject(new Error(msg.error));
+        return;
+      }
+      return; // unrecognized for streaming -- ignore
+    }
+
+    // Non-streaming case: existing pending-Promise path
+    const pending = this.pending.get(id);
     if (!pending) {
-      console.error(`[PythonBridge] response for unknown id: ${msg.id}`);
+      console.error(`[PythonBridge] response for unknown id: ${id}`);
       return;
     }
-    this.pending.delete(msg.id);
+    this.pending.delete(id);
     if (msg.error !== undefined) {
       pending.reject(new Error(msg.error));
     } else {

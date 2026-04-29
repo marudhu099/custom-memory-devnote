@@ -149,3 +149,113 @@ def test_blob_encode_decode_roundtrip():
     b64 = base64.b64encode(arr.tobytes()).decode("ascii")
     decoded = worker._decode_blob(b64)
     assert np.allclose(decoded, original)
+
+
+# === stream_generate tests (Task 4) ===
+
+import json
+
+
+class FakeChunk:
+    """Mimics one item from client.models.generate_content_stream(...)."""
+    def __init__(self, text: str):
+        self.text = text
+
+
+def _captured_messages(capsys) -> list[dict]:
+    """Parse all newline-delimited JSON messages written to stdout in this test."""
+    out = capsys.readouterr().out
+    return [json.loads(line) for line in out.strip().split("\n") if line.strip()]
+
+
+def _install_fake_client(monkeypatch, stream_fn):
+    """Install a MagicMock client whose generate_content_stream is `stream_fn`."""
+    fake_client = MagicMock()
+    fake_client.models.generate_content_stream = stream_fn
+    monkeypatch.setattr(worker, "client", fake_client)
+    return fake_client
+
+
+def test_stream_generate_happy_path(monkeypatch, capsys):
+    """stream_generate emits one stream message per chunk + a terminal done message."""
+    chunks = [FakeChunk("Hello "), FakeChunk("world"), FakeChunk("!")]
+    _install_fake_client(monkeypatch, lambda **kw: iter(chunks))
+
+    result = worker.stream_generate("Test prompt", msg_id="req-1")
+
+    assert result is worker._STREAM_HANDLED
+    msgs = _captured_messages(capsys)
+    stream_msgs = [m for m in msgs if m.get("type") == "stream"]
+    done_msgs = [m for m in msgs if m.get("type") == "done"]
+    assert [m["text"] for m in stream_msgs] == ["Hello ", "world", "!"]
+    assert all(m["id"] == "req-1" for m in stream_msgs)
+    assert len(done_msgs) == 1
+    assert done_msgs[0]["result"]["final"] == "Hello world!"
+    assert done_msgs[0]["result"]["model"] == worker.PRIMARY_CHAT_MODEL
+
+
+def test_stream_generate_empty_stream(monkeypatch, capsys):
+    """A stream that yields zero chunks emits no stream messages but still emits done with empty final."""
+    _install_fake_client(monkeypatch, lambda **kw: iter([]))
+
+    result = worker.stream_generate("Test", msg_id="req-2")
+
+    assert result is worker._STREAM_HANDLED
+    msgs = _captured_messages(capsys)
+    stream_msgs = [m for m in msgs if m.get("type") == "stream"]
+    done_msgs = [m for m in msgs if m.get("type") == "done"]
+    assert stream_msgs == []
+    assert len(done_msgs) == 1
+    assert done_msgs[0]["result"]["final"] == ""
+
+
+def test_stream_generate_fallback_on_primary_error(monkeypatch, capsys):
+    """When Flash raises, Flash-Lite is invoked and the done message reflects the fallback model."""
+    call_log: list[str] = []
+
+    def fake_stream(**kw):
+        call_log.append(kw["model"])
+        if kw["model"] == worker.PRIMARY_CHAT_MODEL:
+            raise RuntimeError("503 overloaded")
+        return iter([FakeChunk("from lite")])
+
+    _install_fake_client(monkeypatch, fake_stream)
+
+    result = worker.stream_generate("Q", msg_id="req-3")
+
+    assert result is worker._STREAM_HANDLED
+    assert call_log == [worker.PRIMARY_CHAT_MODEL, worker.FALLBACK_CHAT_MODEL]
+    msgs = _captured_messages(capsys)
+    done_msgs = [m for m in msgs if m.get("type") == "done"]
+    assert len(done_msgs) == 1
+    assert done_msgs[0]["result"]["model"] == worker.FALLBACK_CHAT_MODEL
+    assert "fallback_reason" in done_msgs[0]["result"]
+
+
+def test_stream_generate_both_models_fail(monkeypatch, capsys):
+    """If both primary and fallback raise, stream_generate emits a single error message and returns sentinel."""
+    def fake_stream(**kw):
+        raise RuntimeError(f"both broken: {kw['model']}")
+
+    _install_fake_client(monkeypatch, fake_stream)
+
+    result = worker.stream_generate("Q", msg_id="req-4")
+
+    assert result is worker._STREAM_HANDLED
+    msgs = _captured_messages(capsys)
+    error_msgs = [m for m in msgs if "error" in m]
+    assert len(error_msgs) == 1
+    assert "Both chat models failed" in error_msgs[0]["error"]
+
+
+def test_stream_generate_requires_configure(monkeypatch, capsys):
+    """If client is None, the call falls through to fallback (also None) and emits an error message."""
+    monkeypatch.setattr(worker, "client", None)
+
+    result = worker.stream_generate("Q", msg_id="req-5")
+
+    assert result is worker._STREAM_HANDLED
+    msgs = _captured_messages(capsys)
+    error_msgs = [m for m in msgs if "error" in m]
+    assert len(error_msgs) == 1
+    assert "not configured" in error_msgs[0]["error"].lower()
