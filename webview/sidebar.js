@@ -146,6 +146,10 @@
   let searchMode = false;  // true when user is actively searching
   let currentQuery = '';
 
+  // Chat mode state
+  let currentAssistantBubble = null;  // DOM element receiving streaming chunks
+  let currentAssistantText = '';      // accumulated raw text for final marked render
+
   function resetSearchUI() {
     const header = document.getElementById('recent-notes-header');
     const list = document.getElementById('recent-notes-list');
@@ -387,6 +391,8 @@
 
       vscode.postMessage({ type: 'searchQuery', query: currentQuery });
     }, 300);
+
+    applyMode();
   });
 
   searchClear?.addEventListener('click', () => {
@@ -396,7 +402,139 @@
     currentQuery = '';
     resetSearchUI();
     vscode.postMessage({ type: 'clearSearch' });
+    applyMode();
   });
+
+  // Chat mode: cached DOM + handlers
+  const chatInput = document.getElementById('chat-input');
+  const chatSendBtn = document.getElementById('chat-send');
+  const chatClearBtn = document.getElementById('chat-clear');
+  const chatNewBtn = document.getElementById('chat-new');
+  const chatTranscript = document.getElementById('chat-transcript');
+  const chatBubbles = document.getElementById('chat-bubbles');
+
+  function resolveMode() {
+    const hasSearchText = searchInput && searchInput.value.trim().length > 0;
+    const hasChatText = chatInput && chatInput.value.trim().length > 0;
+    const chatActive = hasChatText
+      || currentAssistantBubble !== null
+      || (chatBubbles && chatBubbles.children.length > 0);
+    if (chatActive) return 'chat';
+    if (hasSearchText) return 'search';
+    return 'recent';
+  }
+
+  function applyMode() {
+    const mode = resolveMode();
+    const recentList = document.getElementById('recent-notes-list');
+    const recentEmpty = document.getElementById('recent-notes-empty');
+    const recentHeader = document.getElementById('recent-notes-header');
+    const searchEmpty = document.getElementById('search-empty');
+    const searchLoading = document.getElementById('search-loading');
+
+    if (mode === 'chat') {
+      if (recentList) recentList.hidden = true;
+      if (recentEmpty) recentEmpty.hidden = true;
+      if (recentHeader) recentHeader.hidden = true;
+      if (searchEmpty) searchEmpty.hidden = true;
+      if (searchLoading) searchLoading.hidden = true;
+      if (chatTranscript) chatTranscript.hidden = false;
+    } else {
+      if (recentList) recentList.hidden = false;
+      if (recentHeader) recentHeader.hidden = false;
+      if (chatTranscript) chatTranscript.hidden = true;
+      // recent/search-empty visibility is managed by their respective render fns
+    }
+  }
+
+  chatSendBtn?.addEventListener('click', sendChat);
+  chatInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendChat();
+    }
+  });
+  chatInput?.addEventListener('input', () => {
+    chatSendBtn.disabled = chatInput.value.trim().length === 0;
+    chatClearBtn.hidden = chatInput.value.length === 0;
+    applyMode();
+  });
+
+  chatClearBtn?.addEventListener('click', () => {
+    chatInput.value = '';
+    chatSendBtn.disabled = true;
+    chatClearBtn.hidden = true;
+    applyMode();
+  });
+
+  chatNewBtn?.addEventListener('click', () => {
+    vscode.postMessage({ type: 'chat-clear' });
+  });
+
+  function sendChat() {
+    const query = chatInput.value.trim();
+    if (!query) return;
+    chatInput.value = '';
+    chatSendBtn.disabled = true;
+    chatClearBtn.hidden = true;
+    vscode.postMessage({ type: 'chat-ask', query });
+  }
+
+  // Chat bubble rendering helpers
+  function appendUserBubble(text) {
+    const div = document.createElement('div');
+    div.className = 'chat-bubble user';
+    div.textContent = text;
+    chatBubbles.appendChild(div);
+    scrollChatToBottom();
+  }
+
+  function appendAssistantBubble() {
+    const div = document.createElement('div');
+    div.className = 'chat-bubble assistant';
+    chatBubbles.appendChild(div);
+    scrollChatToBottom();
+    return div;
+  }
+
+  function appendErrorBubble(message) {
+    const div = document.createElement('div');
+    div.className = 'chat-bubble error';
+    div.textContent = `Error: ${message}`;
+    chatBubbles.appendChild(div);
+    scrollChatToBottom();
+  }
+
+  function scrollChatToBottom() {
+    if (chatTranscript) chatTranscript.scrollTop = chatTranscript.scrollHeight;
+  }
+
+  function renderFinalMarkdown(bubble, finalText, citations) {
+    let html = (typeof marked !== 'undefined' && marked.parse)
+      ? marked.parse(finalText, { breaks: true })
+      : finalText;
+
+    const lookup = {};
+    for (const c of citations) lookup[c.noteNumber] = c.noteId;
+
+    html = html.replace(/\[Note (\d+)\]/g, (match, numStr) => {
+      const num = parseInt(numStr, 10);
+      if (lookup[num]) {
+        const safeId = String(lookup[num]).replace(/"/g, '&quot;');
+        return `<a class="citation-pill" data-note-id="${safeId}" href="#">Note ${num}</a>`;
+      }
+      return match;
+    });
+
+    bubble.innerHTML = html;
+
+    bubble.querySelectorAll('.citation-pill').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        vscode.postMessage({ type: 'chat-open-note', noteId: el.dataset.noteId });
+      });
+    });
+  }
 
   // Reset Python env + Re-index all buttons (Settings)
   document.getElementById('reset-python-env-button')?.addEventListener('click', () => {
@@ -481,6 +619,37 @@
         break;
       case 'setSearchResults':
         renderSearchResults(msg.query, msg.results, msg.error);
+        break;
+      case 'chat-user-turn':
+        appendUserBubble(msg.text);
+        currentAssistantBubble = appendAssistantBubble();
+        currentAssistantText = '';
+        applyMode();
+        break;
+      case 'chat-token':
+        if (currentAssistantBubble) {
+          currentAssistantText += msg.text;
+          currentAssistantBubble.textContent = currentAssistantText;
+          scrollChatToBottom();
+        }
+        break;
+      case 'chat-done':
+        if (currentAssistantBubble) {
+          renderFinalMarkdown(currentAssistantBubble, msg.finalText, msg.citations || []);
+          currentAssistantBubble = null;
+          currentAssistantText = '';
+        }
+        break;
+      case 'chat-error':
+        appendErrorBubble(msg.message);
+        currentAssistantBubble = null;
+        currentAssistantText = '';
+        break;
+      case 'chat-cleared':
+        if (chatBubbles) chatBubbles.innerHTML = '';
+        currentAssistantBubble = null;
+        currentAssistantText = '';
+        applyMode();
         break;
     }
   });

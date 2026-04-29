@@ -23,6 +23,24 @@ for line in sys.stdin:
         response = {"id": msg_id, "error": "test error from mock"}
     elif method == "crash":
         sys.exit(1)  # simulate crash
+    elif method == "stream_generate":
+        chunks = ["Hello ", "from ", "mock"]
+        for chunk in chunks:
+            sys.stdout.write(json.dumps({"id": msg_id, "type": "stream", "text": chunk}) + "\n")
+            sys.stdout.flush()
+        sys.stdout.write(json.dumps({
+            "id": msg_id,
+            "type": "done",
+            "result": {"final": "".join(chunks), "model": "mock-flash"},
+        }) + "\n")
+        sys.stdout.flush()
+        continue
+    elif method == "error_stream":
+        sys.stdout.write(json.dumps({"id": msg_id, "type": "stream", "text": "partial"}) + "\n")
+        sys.stdout.flush()
+        sys.stdout.write(json.dumps({"id": msg_id, "error": "simulated mid-stream failure"}) + "\n")
+        sys.stdout.flush()
+        continue
     else:
         response = {"id": msg_id, "error": f"unknown method: {method}"}
 

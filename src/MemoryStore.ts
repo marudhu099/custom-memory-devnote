@@ -220,6 +220,46 @@ export class MemoryStore {
     };
   }
 
+  async getNotesByIds(ids: string[]): Promise<FullNote[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    if (!this.db || !this._available) {
+      return [];
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    const stmt = this.db.prepare(
+      `SELECT id, title, branch_name, content_json, content_markdown,
+              notion_page_id, notion_page_url, created_at
+         FROM notes
+        WHERE id IN (${placeholders})`,
+    );
+
+    const notes: FullNote[] = [];
+    stmt.bind(ids);
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      notes.push({
+        id: row['id'] as string,
+        title: row['title'] as string,
+        branchName: row['branch_name'] as string,
+        content: JSON.parse(row['content_json'] as string) as StructuredNote,
+        contentMarkdown: row['content_markdown'] as string,
+        notionPageId: (row['notion_page_id'] as string) || null,
+        notionPageUrl: (row['notion_page_url'] as string) || null,
+        createdAt: row['created_at'] as number,
+      });
+    }
+    stmt.free();
+
+    // Preserve input order — chat prompt depends on ranked-order alignment with retrieval scores.
+    const byId = new Map(notes.map((n) => [n.id, n]));
+    return ids
+      .map((id) => byId.get(id))
+      .filter((n): n is FullNote => n !== undefined);
+  }
+
   async clearAll(): Promise<void> {
     if (!this.db) {
       return;

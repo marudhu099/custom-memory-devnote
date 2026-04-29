@@ -98,8 +98,20 @@
           />
           <button class="search-clear" id="search-clear" hidden title="Clear search">✕</button>
         </div>
+        <div class="chat-input-row">
+          <input id="chat-input" type="text" placeholder="💬 Ask your memory..." />
+          <button id="chat-send" disabled>⏎</button>
+          <button id="chat-clear" hidden>✕</button>
+        </div>
         <div class="recent-notes-header" id="recent-notes-header">Recent Notes</div>
         <div id="recent-notes-list"></div>
+        <div id="chat-transcript" hidden>
+          <div class="chat-transcript-header">
+            <span>Chat</span>
+            <button id="chat-new" class="link-button">New chat</button>
+          </div>
+          <div id="chat-bubbles"></div>
+        </div>
         <p class="recent-notes-empty" id="recent-notes-empty">
           Your notes will appear here once you generate your first one.
         </p>
@@ -218,6 +230,7 @@
     </section>
   </main>
 
+  <script nonce="{{NONCE}}" src="lib/marked.min.js"></script>
   <script nonce="{{NONCE}}" src="{{JS_URI}}"></script>
 </body>
 </html>

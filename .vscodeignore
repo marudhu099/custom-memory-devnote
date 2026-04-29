@@ -34,3 +34,6 @@ python/tests/**
 python/.venv-test/**
 python/__pycache__/
 python/.pytest_cache/
+
+# Webview vendored libraries (whitelist so they ship in .vsix)
+!webview/lib/marked.min.js

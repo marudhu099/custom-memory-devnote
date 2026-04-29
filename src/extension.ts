@@ -4,8 +4,11 @@ import { SidebarProvider } from './SidebarProvider';
 import { DraftStore } from './DraftStore';
 import { MemoryStore } from './MemoryStore';
 import { SearchService } from './SearchService';
+import { ChatService } from './ChatService';
+import { PythonBridge } from './PythonBridge';
 
 let searchService: SearchService | null = null;
+let chatService: ChatService | null = null;
 
 export function activate(context: vscode.ExtensionContext) {
   const configService = new ConfigService(context.secrets);
@@ -24,6 +27,21 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  const buildChatService = (svc: SearchService): ChatService => {
+    // ChatService streams via the same Python worker SearchService owns.
+    // SearchService.ensureReady() (called inside ChatService.askQuestion) spawns the bridge,
+    // so we hand ChatService a reference to the same private field via a typed accessor.
+    const bridgeRef: PythonBridge = (svc as unknown as { bridge: PythonBridge }).bridge
+      ?? new Proxy({} as PythonBridge, {
+        get(_t, prop) {
+          const b = (svc as unknown as { bridge: PythonBridge | null }).bridge;
+          if (!b) throw new Error('Python bridge not ready — call SearchService.ensureReady() first.');
+          return (b as any)[prop];
+        },
+      });
+    return new ChatService(svc, memoryStore, bridgeRef);
+  };
+
   const sidebarProvider = new SidebarProvider(
     context.extensionUri,
     context,
@@ -35,6 +53,16 @@ export function activate(context: vscode.ExtensionContext) {
         searchService = new SearchService(context, memoryStore, apiKey);
       }
       return searchService;
+    },
+    (apiKey?: string) => {
+      if (!searchService && apiKey) {
+        searchService = new SearchService(context, memoryStore, apiKey);
+      }
+      if (!searchService) return null;
+      if (!chatService) {
+        chatService = buildChatService(searchService);
+      }
+      return chatService;
     },
   );
 

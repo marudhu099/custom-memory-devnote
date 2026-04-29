@@ -584,3 +584,181 @@ hr {
 .settings-utility-button {
   margin-top: 8px;
 }
+
+/* Chat input row — stacks below search input, mirrors .search-input styling */
+.chat-input-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 0 8px;
+  align-items: center;
+}
+
+.chat-input-row input {
+  flex: 1;
+  width: auto;
+  padding: 8px 10px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.chat-input-row input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.chat-input-row input::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.chat-input-row button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--vscode-foreground);
+  padding: 2px 6px;
+  font-size: 14px;
+  border-radius: 4px;
+}
+
+.chat-input-row button:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground);
+  color: var(--vscode-foreground);
+}
+
+.chat-input-row button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Chat transcript — scrollable region inside the morphing list area */
+#chat-transcript {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.chat-transcript-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border);
+  font-weight: 600;
+  font-size: 0.85em;
+  position: sticky;
+  top: 0;
+  background: var(--vscode-sideBar-background);
+  z-index: 1;
+}
+
+#chat-bubbles {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+/* Chat bubbles */
+.chat-bubble {
+  padding: 8px 10px;
+  margin: 6px 8px;
+  border-radius: 6px;
+  font-size: 0.9em;
+  line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.chat-bubble.user {
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  color: var(--vscode-input-foreground);
+  align-self: flex-end;
+  max-width: 90%;
+}
+
+.chat-bubble.assistant {
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+  border-left: 2px solid var(--vscode-textLink-foreground);
+}
+
+.chat-bubble.error {
+  color: var(--vscode-errorForeground);
+  font-style: italic;
+}
+
+/* Markdown content inside assistant bubbles (rendered by marked) */
+.chat-bubble.assistant p {
+  margin: 0 0 6px 0;
+}
+
+.chat-bubble.assistant p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-bubble.assistant ul,
+.chat-bubble.assistant ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.chat-bubble.assistant code {
+  background: var(--vscode-textCodeBlock-background);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.9em;
+}
+
+.chat-bubble.assistant pre {
+  background: var(--vscode-textCodeBlock-background);
+  padding: 6px 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.85em;
+}
+
+.chat-bubble.assistant pre code {
+  background: transparent;
+  padding: 0;
+}
+
+/* Inline citation pills */
+.citation-pill {
+  display: inline-block;
+  padding: 0 6px;
+  margin: 0 2px;
+  border-radius: 10px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 0.85em;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.citation-pill:hover {
+  filter: brightness(1.2);
+}
+
+/* Text-button link style for "New chat" and similar */
+.link-button {
+  background: none;
+  border: none;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  font-size: 0.85em;
+  padding: 0;
+  font-family: inherit;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
