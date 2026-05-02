@@ -2,7 +2,7 @@
   "name": "devnote",
   "displayName": "DevNote",
   "description": "AI memory for developers. Chat with your notes, search semantically, generate from git diffs, sync to Notion.",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "marudhu099",
   "author": "Marudhupandiyan",
   "license": "MIT",

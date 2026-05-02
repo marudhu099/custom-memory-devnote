@@ -405,79 +405,93 @@
     applyMode();
   });
 
-  // Chat mode: cached DOM + handlers
+  // Tab navigation: home / chat
+  let activeTab = 'home';   // 'home' | 'chat'
+
+  const tabButtons = document.querySelectorAll('.tab-button');
+  const homeTab = document.getElementById('home-tab');
+  const chatTab = document.getElementById('chat-tab');
+
+  tabButtons.forEach((btn) => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  function switchTab(tabName) {
+    activeTab = tabName;
+    if (homeTab) homeTab.hidden = tabName !== 'home';
+    if (chatTab) chatTab.hidden = tabName !== 'chat';
+    tabButtons.forEach((btn) => {
+      const isActive = btn.dataset.tab === tabName;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', String(isActive));
+    });
+  }
+
+  // Defensive init: forcibly apply active-tab state on load
+  switchTab(activeTab);
+
+  // Chat mode: cached DOM (event listeners re-wired in later tasks)
   const chatInput = document.getElementById('chat-input');
   const chatSendBtn = document.getElementById('chat-send');
-  const chatClearBtn = document.getElementById('chat-clear');
+  const chatStopBtn = document.getElementById('chat-stop');
   const chatNewBtn = document.getElementById('chat-new');
-  const chatTranscript = document.getElementById('chat-transcript');
   const chatBubbles = document.getElementById('chat-bubbles');
+
+  function setChatStreaming(isStreaming) {
+    if (chatSendBtn) chatSendBtn.hidden = isStreaming;
+    if (chatStopBtn) chatStopBtn.hidden = !isStreaming;
+  }
 
   function resolveMode() {
     const hasSearchText = searchInput && searchInput.value.trim().length > 0;
-    const hasChatText = chatInput && chatInput.value.trim().length > 0;
-    const chatActive = hasChatText
-      || currentAssistantBubble !== null
-      || (chatBubbles && chatBubbles.children.length > 0);
-    if (chatActive) return 'chat';
-    if (hasSearchText) return 'search';
-    return 'recent';
+    return hasSearchText ? 'search' : 'recent';
   }
 
   function applyMode() {
-    const mode = resolveMode();
-    const recentList = document.getElementById('recent-notes-list');
-    const recentEmpty = document.getElementById('recent-notes-empty');
-    const recentHeader = document.getElementById('recent-notes-header');
-    const searchEmpty = document.getElementById('search-empty');
-    const searchLoading = document.getElementById('search-loading');
-
-    if (mode === 'chat') {
-      if (recentList) recentList.hidden = true;
-      if (recentEmpty) recentEmpty.hidden = true;
-      if (recentHeader) recentHeader.hidden = true;
-      if (searchEmpty) searchEmpty.hidden = true;
-      if (searchLoading) searchLoading.hidden = true;
-      if (chatTranscript) chatTranscript.hidden = false;
-    } else {
-      if (recentList) recentList.hidden = false;
-      if (recentHeader) recentHeader.hidden = false;
-      if (chatTranscript) chatTranscript.hidden = true;
-      // recent/search-empty visibility is managed by their respective render fns
-    }
+    // 2-way toggle within home tab: recent vs search.
+    // Recent/search-empty visibility is managed by their respective render fns.
+    // Header text morphing happens in renderSearchResults / resetSearchUI.
+    void resolveMode();
   }
-
-  chatSendBtn?.addEventListener('click', sendChat);
-  chatInput?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendChat();
-    }
-  });
-  chatInput?.addEventListener('input', () => {
-    chatSendBtn.disabled = chatInput.value.trim().length === 0;
-    chatClearBtn.hidden = chatInput.value.length === 0;
-    applyMode();
-  });
-
-  chatClearBtn?.addEventListener('click', () => {
-    chatInput.value = '';
-    chatSendBtn.disabled = true;
-    chatClearBtn.hidden = true;
-    applyMode();
-  });
-
-  chatNewBtn?.addEventListener('click', () => {
-    vscode.postMessage({ type: 'chat-clear' });
-  });
 
   function sendChat() {
     const query = chatInput.value.trim();
     if (!query) return;
     chatInput.value = '';
     chatSendBtn.disabled = true;
-    chatClearBtn.hidden = true;
     vscode.postMessage({ type: 'chat-ask', query });
+  }
+
+  if (chatSendBtn) {
+    chatSendBtn.addEventListener('click', sendChat);
+  }
+  if (chatInput) {
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChat();
+      }
+    });
+    chatInput.addEventListener('input', () => {
+      if (chatSendBtn) chatSendBtn.disabled = chatInput.value.trim().length === 0;
+    });
+  }
+  if (chatNewBtn) {
+    chatNewBtn.addEventListener('click', () => {
+      vscode.postMessage({ type: 'chat-clear' });
+    });
+  }
+  if (chatStopBtn) {
+    chatStopBtn.addEventListener('click', () => {
+      vscode.postMessage({ type: 'chat-stop' });
+      setChatStreaming(false);
+      if (currentAssistantBubble) {
+        currentAssistantBubble.classList.remove('loading');
+        // bubble keeps its current text — partial preserved
+      }
+      currentAssistantBubble = null;
+      currentAssistantText = '';
+    });
   }
 
   // Chat bubble rendering helpers
@@ -506,7 +520,7 @@
   }
 
   function scrollChatToBottom() {
-    if (chatTranscript) chatTranscript.scrollTop = chatTranscript.scrollHeight;
+    if (chatBubbles) chatBubbles.scrollTop = chatBubbles.scrollHeight;
   }
 
   function renderFinalMarkdown(bubble, finalText, citations) {
@@ -623,11 +637,30 @@
       case 'chat-user-turn':
         appendUserBubble(msg.text);
         currentAssistantBubble = appendAssistantBubble();
+        currentAssistantBubble.classList.add('loading');
+        currentAssistantBubble.textContent = 'Searching your notes...';
         currentAssistantText = '';
-        applyMode();
+        setChatStreaming(true);
         break;
+      case 'chat-stage': {
+        if (!currentAssistantBubble) break;
+        if (msg.stage === 'retrieving') {
+          currentAssistantBubble.textContent = 'Searching your notes...';
+        } else if (msg.stage === 'retrieved') {
+          const n = msg.noteCount ?? 0;
+          currentAssistantBubble.textContent = `Found ${n} note${n === 1 ? '' : 's'}...`;
+        } else if (msg.stage === 'generating') {
+          currentAssistantBubble.textContent = 'Generating answer...';
+        }
+        break;
+      }
       case 'chat-token':
         if (currentAssistantBubble) {
+          if (currentAssistantBubble.classList.contains('loading')) {
+            currentAssistantBubble.classList.remove('loading');
+            currentAssistantBubble.textContent = '';
+            currentAssistantText = '';
+          }
           currentAssistantText += msg.text;
           currentAssistantBubble.textContent = currentAssistantText;
           scrollChatToBottom();
@@ -639,17 +672,22 @@
           currentAssistantBubble = null;
           currentAssistantText = '';
         }
+        setChatStreaming(false);
         break;
       case 'chat-error':
         appendErrorBubble(msg.message);
         currentAssistantBubble = null;
         currentAssistantText = '';
+        setChatStreaming(false);
+        break;
+      case 'chat-stopped':
+        setChatStreaming(false);
         break;
       case 'chat-cleared':
         if (chatBubbles) chatBubbles.innerHTML = '';
         currentAssistantBubble = null;
         currentAssistantText = '';
-        applyMode();
+        setChatStreaming(false);
         break;
     }
   });
