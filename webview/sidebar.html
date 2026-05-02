@@ -87,39 +87,49 @@
       <button class="primary-button" id="generate-button">Generate Doc</button>
       <p class="disabled-reason" id="disabled-reason" hidden></p>
 
-      <div class="recent-notes-section">
-        <div class="search-input-wrapper">
-          <input
-            type="text"
-            id="search-input"
-            class="search-input"
-            placeholder="Search your memory..."
-            autocomplete="off"
-          />
-          <button class="search-clear" id="search-clear" hidden title="Clear search">✕</button>
-        </div>
-        <div class="chat-input-row">
-          <input id="chat-input" type="text" placeholder="💬 Ask your memory..." />
-          <button id="chat-send" disabled>⏎</button>
-          <button id="chat-clear" hidden>✕</button>
-        </div>
-        <div class="recent-notes-header" id="recent-notes-header">Recent Notes</div>
-        <div id="recent-notes-list"></div>
-        <div id="chat-transcript" hidden>
-          <div class="chat-transcript-header">
-            <span>Chat</span>
-            <button id="chat-new" class="link-button">New chat</button>
+      <nav class="tab-bar" role="tablist">
+        <button class="tab-button active" data-tab="home" role="tab" aria-selected="true">🏠 Home</button>
+        <button class="tab-button" data-tab="chat" role="tab" aria-selected="false">💬 Chat</button>
+      </nav>
+
+      <div id="home-tab" class="tab-panel" role="tabpanel">
+        <div class="recent-notes-section">
+          <div class="search-input-wrapper">
+            <input
+              type="text"
+              id="search-input"
+              class="search-input"
+              placeholder="Search your memory..."
+              autocomplete="off"
+            />
+            <button class="search-clear" id="search-clear" hidden title="Clear search">✕</button>
           </div>
-          <div id="chat-bubbles"></div>
+          <div class="recent-notes-header" id="recent-notes-header">Recent Notes</div>
+          <div id="recent-notes-list"></div>
+          <p class="recent-notes-empty" id="recent-notes-empty">
+            Your notes will appear here once you generate your first one.
+          </p>
+          <p class="search-empty" id="search-empty" hidden></p>
+          <p class="search-loading" id="search-loading" hidden>Searching memory…</p>
+          <p class="recent-notes-unavailable" id="recent-notes-unavailable" hidden>
+            Memory unavailable — notes will still sync to Notion but won't appear here.
+          </p>
         </div>
-        <p class="recent-notes-empty" id="recent-notes-empty">
-          Your notes will appear here once you generate your first one.
-        </p>
-        <p class="search-empty" id="search-empty" hidden></p>
-        <p class="search-loading" id="search-loading" hidden>Searching memory…</p>
-        <p class="recent-notes-unavailable" id="recent-notes-unavailable" hidden>
-          Memory unavailable — notes will still sync to Notion but won't appear here.
-        </p>
+      </div>
+
+      <div id="chat-tab" class="tab-panel" role="tabpanel" hidden>
+        <header class="chat-header">
+          <span class="chat-title">Chat</span>
+          <button id="chat-new" class="link-button">New chat</button>
+        </header>
+
+        <div id="chat-bubbles" class="chat-bubbles"></div>
+
+        <footer class="chat-input-bar">
+          <input id="chat-input" type="text" placeholder="Ask your memory..." />
+          <button id="chat-send" class="icon-button send-button" disabled aria-label="Send">⏎</button>
+          <button id="chat-stop" class="icon-button stop-button" hidden aria-label="Stop">■</button>
+        </footer>
       </div>
     </section>
 
@@ -230,7 +240,7 @@
     </section>
   </main>
 
-  <script nonce="{{NONCE}}" src="lib/marked.min.js"></script>
+  <script nonce="{{NONCE}}" src="{{MARKED_URI}}"></script>
   <script nonce="{{NONCE}}" src="{{JS_URI}}"></script>
 </body>
 </html>

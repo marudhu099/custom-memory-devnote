@@ -21,6 +21,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private syncAbortController: AbortController | null = null;
   private currentDuplicatePageId: string | null = null;
   private cachedStructuredContent: string | null = null;
+  private currentChatStreamId = 0;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -104,6 +105,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             break;
           case 'chat-ask':
             await this.handleChatAsk(msg.query);
+            break;
+          case 'chat-stop':
+            this.handleChatStop();
             break;
           case 'chat-clear':
             this.handleChatClear();
@@ -868,20 +872,34 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    const streamId = ++this.currentChatStreamId;
+
     // Echo the user turn to the webview immediately so it appears before retrieval delay.
-    this.postMessage({ type: 'chat-user-turn', text: query });
+    this.postMessage({ type: 'chat-user-turn', text: query, streamId });
 
     await chatService.askQuestion(query, {
+      onStageChange: (stage, meta) => {
+        if (streamId !== this.currentChatStreamId) return;
+        this.postMessage({ type: 'chat-stage', stage, noteCount: meta?.noteCount, streamId });
+      },
       onChunk: (text: string) => {
-        this.postMessage({ type: 'chat-token', text });
+        if (streamId !== this.currentChatStreamId) return;
+        this.postMessage({ type: 'chat-token', text, streamId });
       },
       onDone: (finalText: string, citations: CitationRef[]) => {
-        this.postMessage({ type: 'chat-done', finalText, citations });
+        if (streamId !== this.currentChatStreamId) return;
+        this.postMessage({ type: 'chat-done', finalText, citations, streamId });
       },
       onError: (err: Error) => {
-        this.postMessage({ type: 'chat-error', message: err.message });
+        if (streamId !== this.currentChatStreamId) return;
+        this.postMessage({ type: 'chat-error', message: err.message, streamId });
       },
     });
+  }
+
+  private handleChatStop(): void {
+    this.currentChatStreamId++;
+    this.postMessage({ type: 'chat-stopped' });
   }
 
   private handleChatClear(): void {
@@ -904,11 +922,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const jsUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'webview', 'sidebar.js')
     );
+    const markedUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'webview', 'lib', 'marked.min.js')
+    );
     const nonce = this.generateNonce();
 
     return html
       .replace(/\{\{CSS_URI\}\}/g, cssUri.toString())
       .replace(/\{\{JS_URI\}\}/g, jsUri.toString())
+      .replace(/\{\{MARKED_URI\}\}/g, markedUri.toString())
       .replace(/\{\{NONCE\}\}/g, nonce);
   }
 

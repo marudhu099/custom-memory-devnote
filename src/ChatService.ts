@@ -16,7 +16,10 @@ export interface ChatTurn {
   citations?: CitationRef[];
 }
 
+export type ChatStage = 'retrieving' | 'retrieved' | 'generating';
+
 export interface ChatStreamCallbacks {
+  onStageChange?: (stage: ChatStage, meta?: { noteCount?: number }) => void;
   onChunk: (text: string) => void;
   onDone: (finalText: string, citations: CitationRef[]) => void;
   onError: (err: Error) => void;
@@ -33,14 +36,19 @@ export class ChatService {
 
   async askQuestion(query: string, callbacks: ChatStreamCallbacks): Promise<void> {
     try {
+      callbacks.onStageChange?.('retrieving');
       await this.searchService.ensureReady();
 
       const ranked = await this.searchService.searchQuery(query, RETRIEVED_NOTES_K);
       const notes = await this.memoryStore.getNotesByIds(ranked.map((r) => r.id));
 
+      callbacks.onStageChange?.('retrieved', { noteCount: notes.length });
+
       // Build prompt BEFORE pushing the user turn so the current query isn't duplicated in the history block
       const prompt = this.buildPrompt(query, notes);
       this.history.push({ role: 'user', text: query });
+
+      callbacks.onStageChange?.('generating');
 
       const result = await this.bridge.callStream(
         'stream_generate',
