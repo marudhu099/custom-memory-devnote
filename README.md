@@ -35,8 +35,7 @@ Built into VS Code. One keyboard shortcut. No leaving your editor.
                               │
                               ▼
    ┌─────────────────────────────────────────────────────────┐
-   │   3. Gemini reads your branch diff (main...HEAD)
-          and you commits, commands
+   │   3. Gemini reads your branch diff (main...HEAD)         │
    │      and generates a structured dev note.                │
    └─────────────────────────────────────────────────────────┘
                               │
@@ -74,7 +73,7 @@ That's it. No hidden markers, no parsing of `// TODO` comments, no magic directi
 
 ## Features
 
-### Currently shipping (v0.3.0)
+### Currently shipping (v0.5.0)
 
 #### Generate & sync
 
@@ -84,13 +83,35 @@ That's it. No hidden markers, no parsing of `// TODO` comments, no magic directi
 - 📤 Notion sync with duplicate handling — Append, Replace, or Cancel when a title collides
 - 💾 Draft recovery — if sync fails, your note survives restarts and shows as a banner
 
-#### Recent Notes (v0.3.0's headline feature)
+#### Recent Notes (v0.3.0)
 
 - 📜 Every synced note saved to a local SQLite memory (`devnote.db`)
 - 👀 Recent Notes list in the sidebar — scroll through your full history
 - ⚡ Click any note → instant local preview (offline, no Notion round-trip)
 - 🔗 Full-width "Open in Notion" button inside the preview for sharing/mobile
 - 🧹 "Clear all memory" with optional backup-to-JSON export and a safe confirmation popup
+
+#### Semantic Search (v0.4.0)
+
+- 🔍 Type a natural-language query → results ranked by **meaning**, not keywords
+- Uses Gemini `gemini-embedding-001` (3072-dim, L2-normalized) → dot product over your local memory
+- Sub-50ms search across thousands of notes
+- 87%-style match badges on each row so you know how strong the hit is
+- Lazy-spawned Python worker for the AI/ML layer — TypeScript orchestrates, Python executes
+- One-time backfill popup the first time you search, then cached forever
+- Settings → "Reset Python environment" + "Re-index all notes" for power-user recovery
+- Threshold recalibrated to 0.70 in v0.4.2 to match the 3072-dim embedding noise floor
+
+#### Chat with your memory (v0.5.0) — Phase 2 closer
+
+- 💬 Ask natural-language questions about your past notes — get grounded answers with citations
+- **RAG pipeline:** retrieval (v0.4.0 reused) → augmentation (grounded prompt + last 4 turns of history) → generation (`gemini-2.5-flash` streaming)
+- Inline clickable citation pills (`[Note 1]`) — click to open the source note in the existing preview
+- Light multi-turn — follow-ups like *"when was that?"* resolve pronouns from prior turns
+- Streaming token-by-token (~500ms time-to-first-token) for snappy chat feel
+- Refusal path: when the answer isn't in your notes, DevNote replies *"I don't find that in your notes"* — no hallucination
+- Top-5 retrieved notes per turn at threshold 0.70 — single source of truth across search and chat
+- Phase 2 of the AI Memory Arc closes here — DevNote now **captures, searches, recalls, AND converses**
 
 #### Developer experience
 
@@ -197,21 +218,50 @@ The Gemini key and Notion token are stored in VS Code's SecretStorage, not in se
 
 ---
 
-## Roadmap — Phase 2: AI Memory Arc
+## Roadmap — Phase 2: AI Memory Arc *(complete)*
 
-DevNote's vision is to evolve from a **one-way publisher** into a **true AI memory layer** for developers. The plan is three releases:
+DevNote evolved from a **one-way publisher** into a **true AI memory layer** for developers across three releases. All three have shipped:
 
-### ✅ v0.3.0 — Recent Notes *(shipped)*
+### ✅ v0.3.0 — Recent Notes
 
-Every synced note gets a permanent home in a local SQLite database. A scrollable Recent Notes list in the sidebar. Click any note → instant inline preview served from local storage. Clear all memory with confirmation and optional export. **SQLite foundation for everything that follows.**
+Every synced note gets a permanent home in a local SQLite database. A scrollable Recent Notes list in the sidebar. Click any note → instant inline preview served from local storage. Clear all memory with confirmation and optional export. **SQLite foundation for everything that followed.**
 
-### 🚧 v0.4.0 — Semantic Search *(in progress)*
+### ✅ v0.4.0 — Semantic Search
 
-Type a natural-language question into the sidebar ("notion rate limit thing", "the SQLite decision") and DevNote returns your most relevant past notes — **ranked by meaning, not keywords**. Powered by Gemini `text-embedding-005` (768-dim vectors) + brute-force cosine similarity over your local memory. Under 50ms for thousands of notes. TypeScript + Python hybrid starts here — Python owns the AI/ML layer.
+Type a natural-language question into the sidebar (*"notion rate limit thing"*, *"the SQLite decision"*) and DevNote returns your most relevant past notes — **ranked by meaning, not keywords**. Powered by Gemini `gemini-embedding-001` (3072-dim, L2-normalized vectors) + brute-force dot-product similarity over your local memory. Under 50ms for thousands of notes. TypeScript + Python hybrid started here — Python owns the AI/ML layer.
 
-### 💡 v0.5.0 — *(coming soon)*
+- **v0.4.1 patch** — fixed a Windows Python detection race that caused false "Python 3.10+ not found" errors even when 3.12 was installed
+- **v0.4.2 patch** — recalibrated the similarity threshold from 0.35 → 0.70 to match the 3072-dim embedding noise floor (the higher-dim model has a different similarity distribution; 0.35 let weak matches through)
 
-The memory becomes reasoning-ready. Details to be shared when we get there.
+### ✅ v0.5.0 — RAG Chat
+
+The memory became conversational. Ask natural-language questions about your past notes and get grounded, cited answers. **R**etrieval (v0.4.0 reused as-is) + **A**ugmentation (grounded prompt + last-4-turns history) + **G**eneration (`gemini-2.5-flash` streaming). Inline clickable citation pills, refusal path on no-match (no hallucination), light multi-turn for pronouns and follow-ups. **Phase 2 closes here.**
+
+---
+
+## What's next — Phase 3 candidates
+
+Phase 2 is shipped. Phase 3 is being scoped from real-use feedback. Items in flight or under active consideration:
+
+### 🚧 v0.5.1 — UX overhaul + chat polish *(in progress)*
+
+Real-use feedback on v0.5.0 surfaced rough edges, plus one production bug. v0.5.1 ships:
+
+- 🐛 Markdown rendering fix — `marked.min.js` was being blocked by the webview sandbox (HTTP 403) because it wasn't loaded via `webview.asWebviewUri(...)`. Citations are clickable pills again, bold/italic/lists/code render correctly.
+- 💬 Chat moves to a dedicated tab (🏠 Home / 💬 Chat) — full-height with sticky bottom input, ChatGPT/Claude muscle memory. Reverses the v0.5.0 stacked-input layout after dogfooding showed it felt cramped.
+- ■ Stop button — replaces the send button while answers are streaming. Click stop → the bubble freezes at its current text (partial preserved).
+- 3-stage loading state — *"Searching your notes..." → "Found N notes..." → "Generating answer..."* — replaces the silent-wait window between send and first token.
+
+### 💡 v0.6.0+ — under consideration
+
+Listed in priority order based on user feedback so far. Tracked transparently so the direction is visible:
+
+- **Persistent chat history** — ChatGPT-style browseable list of past conversations. Today chats are in-memory only and cleared on VS Code restart.
+- **User-selectable chat model** — Settings option to pick between Flash (default), Flash-Lite (cost-sensitive), or Pro (deep thinking). Today the model is hardcoded.
+- **Dynamic suggested questions** — generate prompts from the user's actual notes via Gemini, instead of hardcoded examples.
+- **Progressive markdown rendering** — render bold/lists/pills inline as the stream completes each fragment, instead of waiting until `done` to render.
+- **Python-side stream cancellation** — Stop button currently discards chunks on the TS side; making the worker actually cancel the Gemini call would save quota for cost-sensitive users.
+- **Retrieval evaluation harness** — a `golden set` of 30 questions with known relevant notes, automated metrics (Recall@5, Precision@5, MRR) to drive future tuning instead of vibes.
 
 ---
 
