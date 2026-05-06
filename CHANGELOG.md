@@ -13,20 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- 💬 Chat now lives in a dedicated tab (🏠 Home / 💬 Chat) instead of stacked inputs. Reverses v0.5.0 D16 after dogfooding showed the stacked pattern felt cramped. Full-height chat with sticky bottom input, ChatGPT/Claude muscle memory.
-- New ← back button at top of chat tab returns to Home (Recent Notes / Search). Chat history is preserved across tab switches within a session.
+- 💬 Chat now lives in a dedicated tab (🏠 Home / 💬 Chat) instead of stacked inputs. Reverses v0.5.0 D16 after dogfooding showed the stacked pattern felt cramped. Full-height chat with sticky bottom input, ChatGPT/Claude muscle memory. Switch between Home and Chat via the tab bar — chat history is preserved across tab switches within a session.
 - Removed the left-border accent on assistant bubbles (cleaner look).
+- Chat empty state is intentionally minimal — just the header and the input pinned at the bottom. The "Ask your memory…" placeholder is enough onboarding; no extra copy or buttons.
 
 ### Added
 
 - ■ Stop button — replaces the send button while answers are streaming. Click stop → bubble freezes at current text (partial answer preserved). Send button restores when streaming finishes or user stops.
 - 3-stage loading state — "Searching your notes…" → "Found N notes…" → "Generating answer…" — replaces the silent wait window between send and first token.
-- Suggested questions in chat empty state — 4 hardcoded prompts ("What did I do last week?", "Show recent OAuth work", "Summarize my April notes", "What did I fix in the last session?"). Click to auto-fill + submit.
 
 ### Notes
 
 - Stop is currently TS-side only (worker keeps streaming, output is discarded). Python-side stream cancellation deferred to v0.6+.
-- Suggested questions are hardcoded; dynamic generation from your notebook deferred to v0.6+.
 - This is the first **post-launch polish** release in the Phase 2 arc — demonstrates the ship-then-iterate loop. D16 was reasonable at planning but real-use data overruled it.
 
 ## [0.5.0] — 2026-04-26
